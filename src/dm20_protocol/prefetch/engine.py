@@ -24,6 +24,10 @@ from .observer import ContextObserver, GameContext, PlayerTurn
 
 logger = logging.getLogger("dm20-protocol")
 
+#: Output budget per prefetch call. Claude 5.5 models always think, and
+#: thinking counts toward max_tokens, so leave room beyond the ~150-word reply.
+PREFETCH_MAX_TOKENS = 2048
+
 
 # ---------------------------------------------------------------------------
 # LLM Client Protocol (matches existing project pattern)
@@ -314,7 +318,7 @@ class PrefetchEngine:
 
             try:
                 variant_text = await self.main_model.generate(
-                    prompt, max_tokens=512
+                    prompt, max_tokens=PREFETCH_MAX_TOKENS
                 )
                 variants[scenario_key] = variant_text.strip()
 
@@ -429,7 +433,7 @@ class PrefetchEngine:
         )
 
         try:
-            refined = await self.refinement_model.generate(prompt, max_tokens=512)
+            refined = await self.refinement_model.generate(prompt, max_tokens=PREFETCH_MAX_TOKENS)
 
             # Track refinement token usage
             estimated_input = len(prompt.split()) * 1.3
@@ -466,7 +470,7 @@ class PrefetchEngine:
         )
 
         try:
-            text = await self.main_model.generate(prompt, max_tokens=512)
+            text = await self.main_model.generate(prompt, max_tokens=PREFETCH_MAX_TOKENS)
             result = self._basic_replace(text.strip(), actual_result)
             return result
         except Exception as e:

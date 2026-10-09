@@ -21,6 +21,7 @@ from dm20_protocol.claudmaster.llm_client import (
     LLMDependencyError,
 )
 from dm20_protocol.claudmaster.config import ClaudmasterConfig
+from dm20_protocol.claudmaster.model_ids import HAIKU, OPUS, SONNET
 
 
 # ---------------------------------------------------------------------------
@@ -50,11 +51,16 @@ def mock_llm_with_responses() -> MockLLMClient:
 def mock_anthropic_message() -> MagicMock:
     """Create a mock Anthropic message response."""
     message = MagicMock()
+    message.stop_reason = "end_turn"
 
-    # Mock content block with text
+    # Content blocks are read by type: a thinking block first, then text
+    thinking_block = MagicMock()
+    thinking_block.type = "thinking"
+    thinking_block.thinking = ""
     content_block = MagicMock()
+    content_block.type = "text"
     content_block.text = "This is a generated response from Claude."
-    message.content = [content_block]
+    message.content = [thinking_block, content_block]
 
     # Mock usage stats
     message.usage = MagicMock()
@@ -172,8 +178,8 @@ def test_anthropic_client_with_api_key_param() -> None:
          patch("dm20_protocol.claudmaster.llm_client.AsyncAnthropic", MagicMock()):
         client = AnthropicLLMClient(api_key="test-key-123")
         assert client.api_key == "test-key-123"
-        assert client.model == "claude-sonnet-4-5-20250929"
-        assert client.temperature == 0.7
+        assert client.model == SONNET
+        assert client.temperature is None
         assert client.default_max_tokens == 1024
 
 
@@ -194,12 +200,12 @@ def test_anthropic_client_custom_params() -> None:
          patch("dm20_protocol.claudmaster.llm_client.AsyncAnthropic", MagicMock()):
         client = AnthropicLLMClient(
             api_key="test-key",
-            model="claude-haiku-4-5-20251001",
-            temperature=0.9,
+            model=HAIKU,
+            temperature=0.9,  # deprecated: accepted and ignored
             default_max_tokens=2048,
         )
-        assert client.model == "claude-haiku-4-5-20251001"
-        assert client.temperature == 0.9
+        assert client.model == HAIKU
+        assert client.temperature is None
         assert client.default_max_tokens == 2048
 
 
@@ -210,7 +216,7 @@ def test_anthropic_client_with_effort() -> None:
          patch("dm20_protocol.claudmaster.llm_client.AsyncAnthropic", MagicMock()):
         client = AnthropicLLMClient(
             api_key="test-key",
-            model="claude-opus-4-5-20250929",
+            model=OPUS,
             effort="medium",
         )
         assert client.effort == "medium"
@@ -241,9 +247,9 @@ def test_anthropic_client_invalid_effort() -> None:
 
 @pytest.mark.anyio
 async def test_anthropic_generate_success(mock_anthropic_message: MagicMock) -> None:
-    """Test successful generation with AnthropicLLMClient."""
+    """Test successful generation with AnthropicLLMClient (no sampling params)."""
     mock_async_client = AsyncMock()
-    mock_async_client.messages.create = AsyncMock(return_value=mock_anthropic_message)
+    mock_async_client.beta.messages.create = AsyncMock(return_value=mock_anthropic_message)
 
     with patch("dm20_protocol.claudmaster.llm_client._HAS_ANTHROPIC", True), \
          patch("dm20_protocol.claudmaster.llm_client._anthropic_module", MagicMock()), \
@@ -252,35 +258,40 @@ async def test_anthropic_generate_success(mock_anthropic_message: MagicMock) -> 
         response = await client.generate("Test prompt", max_tokens=512)
 
     assert response == "This is a generated response from Claude."
-    mock_async_client.messages.create.assert_called_once()
-    call_kwargs = mock_async_client.messages.create.call_args[1]
-    assert call_kwargs["model"] == "claude-sonnet-4-5-20250929"
+    mock_async_client.beta.messages.create.assert_called_once()
+    call_kwargs = mock_async_client.beta.messages.create.call_args[1]
+    assert call_kwargs["model"] == SONNET
     assert call_kwargs["max_tokens"] == 512
-    assert call_kwargs["temperature"] == 0.7
-    assert call_kwargs["messages"][0]["content"] == "Test prompt"
+    for banned in ("temperature", "top_p", "top_k"):
+        assert banned not in call_kwargs
+    assert call_kwargs["messages"][0]["content"] == [{"type": "text", "text": "Test prompt"}]
+    assert call_kwargs["fallbacks"] == "default"
+    assert call_kwargs["betas"] == ["server-side-fallback-2026-07-01"]
 
 
 @pytest.mark.anyio
 async def test_anthropic_generate_with_effort(mock_anthropic_message: MagicMock) -> None:
     """Test that effort parameter is passed as output_config in API call."""
     mock_async_client = AsyncMock()
-    mock_async_client.messages.create = AsyncMock(return_value=mock_anthropic_message)
+    mock_async_client.beta.messages.create = AsyncMock(return_value=mock_anthropic_message)
 
     with patch("dm20_protocol.claudmaster.llm_client._HAS_ANTHROPIC", True), \
          patch("dm20_protocol.claudmaster.llm_client._anthropic_module", MagicMock()), \
          patch("dm20_protocol.claudmaster.llm_client.AsyncAnthropic", return_value=mock_async_client):
-        client = AnthropicLLMClient(api_key="test-key", effort="medium")
+        client = AnthropicLLMClient(api_key="test-key", effort="high")
         await client.generate("Test prompt", max_tokens=512)
 
-    call_kwargs = mock_async_client.messages.create.call_args[1]
-    assert call_kwargs["output_config"] == {"effort": "medium"}
+    call_kwargs = mock_async_client.beta.messages.create.call_args[1]
+    assert call_kwargs["output_config"] == {"effort": "high"}
 
 
 @pytest.mark.anyio
-async def test_anthropic_generate_without_effort(mock_anthropic_message: MagicMock) -> None:
-    """Test that output_config is not included when effort is None."""
+async def test_anthropic_generate_without_effort_sends_explicit_default(
+    mock_anthropic_message: MagicMock,
+) -> None:
+    """Effort is always sent explicitly (Opus 5.5 defaults to medium)."""
     mock_async_client = AsyncMock()
-    mock_async_client.messages.create = AsyncMock(return_value=mock_anthropic_message)
+    mock_async_client.beta.messages.create = AsyncMock(return_value=mock_anthropic_message)
 
     with patch("dm20_protocol.claudmaster.llm_client._HAS_ANTHROPIC", True), \
          patch("dm20_protocol.claudmaster.llm_client._anthropic_module", MagicMock()), \
@@ -288,15 +299,15 @@ async def test_anthropic_generate_without_effort(mock_anthropic_message: MagicMo
         client = AnthropicLLMClient(api_key="test-key")
         await client.generate("Test prompt", max_tokens=512)
 
-    call_kwargs = mock_async_client.messages.create.call_args[1]
-    assert "output_config" not in call_kwargs
+    call_kwargs = mock_async_client.beta.messages.create.call_args[1]
+    assert call_kwargs["output_config"] == {"effort": "medium"}
 
 
 @pytest.mark.anyio
 async def test_anthropic_generate_default_max_tokens(mock_anthropic_message: MagicMock) -> None:
     """Test that AnthropicLLMClient uses default_max_tokens when not specified."""
     mock_async_client = AsyncMock()
-    mock_async_client.messages.create = AsyncMock(return_value=mock_anthropic_message)
+    mock_async_client.beta.messages.create = AsyncMock(return_value=mock_anthropic_message)
 
     with patch("dm20_protocol.claudmaster.llm_client._HAS_ANTHROPIC", True), \
          patch("dm20_protocol.claudmaster.llm_client._anthropic_module", MagicMock()), \
@@ -304,7 +315,7 @@ async def test_anthropic_generate_default_max_tokens(mock_anthropic_message: Mag
         client = AnthropicLLMClient(api_key="test-key", default_max_tokens=2048)
         await client.generate("Test prompt")
 
-    call_kwargs = mock_async_client.messages.create.call_args[1]
+    call_kwargs = mock_async_client.beta.messages.create.call_args[1]
     assert call_kwargs["max_tokens"] == 2048
 
 
@@ -317,7 +328,7 @@ async def test_anthropic_generate_api_error() -> None:
     mock_module.RateLimitError = type("RateLimitError", (Exception,), {})
 
     mock_async_client = AsyncMock()
-    mock_async_client.messages.create = AsyncMock(
+    mock_async_client.beta.messages.create = AsyncMock(
         side_effect=mock_module.APIError("API request failed")
     )
 
@@ -338,7 +349,7 @@ async def test_anthropic_generate_rate_limit_error() -> None:
     mock_module.RateLimitError = type("RateLimitError", (Exception,), {})
 
     mock_async_client = AsyncMock()
-    mock_async_client.messages.create = AsyncMock(
+    mock_async_client.beta.messages.create = AsyncMock(
         side_effect=mock_module.RateLimitError("Rate limit exceeded")
     )
 
@@ -367,10 +378,11 @@ async def test_anthropic_generate_stream_success() -> None:
     mock_stream_cm = AsyncMock()
     mock_stream_cm.__aenter__ = AsyncMock(return_value=mock_stream)
     mock_stream_cm.__aexit__ = AsyncMock(return_value=False)
-    mock_async_client.messages.stream = MagicMock(return_value=mock_stream_cm)
+    mock_async_client.beta.messages.stream = MagicMock(return_value=mock_stream_cm)
 
-    # Mock the final message (called after the 'async with' block)
+    # Mock the final message
     final_message = MagicMock()
+    final_message.stop_reason = "end_turn"
     final_message.usage.input_tokens = 50
     final_message.usage.output_tokens = 100
     mock_stream.get_final_message = AsyncMock(return_value=final_message)
@@ -466,27 +478,30 @@ def test_config_per_agent_fields() -> None:
     config = ClaudmasterConfig()
 
     # Check default values
-    assert config.narrator_model == "claude-haiku-4-5-20251001"
-    assert config.arbiter_model == "claude-sonnet-4-5-20250929"
-    assert config.narrator_max_tokens == 1024
-    assert config.arbiter_max_tokens == 2048
-    assert config.narrator_temperature == 0.8
-    assert config.arbiter_temperature == 0.3
+    assert config.narrator_model == OPUS
+    assert config.arbiter_model == OPUS
+    assert config.narrator_max_tokens == 8000
+    assert config.arbiter_max_tokens == 16000
+    assert config.narrator_effort == "medium"
+    assert config.arbiter_effort == "medium"
+    # Deprecated sampling params default to None and are never sent
+    assert config.narrator_temperature is None
+    assert config.arbiter_temperature is None
 
 
 def test_config_per_agent_custom_values() -> None:
     """Test ClaudmasterConfig with custom per-agent values."""
     config = ClaudmasterConfig(
-        narrator_model="claude-opus-4-6",
-        arbiter_model="claude-haiku-4-5-20251001",
+        narrator_model=OPUS,
+        arbiter_model=HAIKU,
         narrator_max_tokens=2048,
         arbiter_max_tokens=4096,
         narrator_temperature=0.9,
         arbiter_temperature=0.2,
     )
 
-    assert config.narrator_model == "claude-opus-4-6"
-    assert config.arbiter_model == "claude-haiku-4-5-20251001"
+    assert config.narrator_model == OPUS
+    assert config.arbiter_model == HAIKU
     assert config.narrator_max_tokens == 2048
     assert config.arbiter_max_tokens == 4096
     assert config.narrator_temperature == 0.9
@@ -517,10 +532,10 @@ def test_config_max_tokens_bounds() -> None:
     # Valid values
     config = ClaudmasterConfig(
         narrator_max_tokens=256,  # Minimum
-        arbiter_max_tokens=16384,  # Maximum
+        arbiter_max_tokens=128000,  # Maximum (Opus 5.5 max output)
     )
     assert config.narrator_max_tokens == 256
-    assert config.arbiter_max_tokens == 16384
+    assert config.arbiter_max_tokens == 128000
 
     # Below minimum (narrator)
     with pytest.raises(ValueError):
@@ -528,7 +543,7 @@ def test_config_max_tokens_bounds() -> None:
 
     # Above maximum (arbiter)
     with pytest.raises(ValueError):
-        ClaudmasterConfig(arbiter_max_tokens=20000)
+        ClaudmasterConfig(arbiter_max_tokens=200000)
 
 
 # ---------------------------------------------------------------------------
@@ -539,10 +554,8 @@ def test_config_max_tokens_bounds() -> None:
 def test_create_multi_model_client_from_config() -> None:
     """Test creating a MultiModelClient from ClaudmasterConfig."""
     config = ClaudmasterConfig(
-        narrator_model="claude-haiku-4-5-20251001",
-        arbiter_model="claude-sonnet-4-5-20250929",
-        narrator_temperature=0.8,
-        arbiter_temperature=0.3,
+        narrator_model=HAIKU,
+        arbiter_model=SONNET,
         narrator_max_tokens=1024,
         arbiter_max_tokens=2048,
     )

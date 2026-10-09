@@ -2444,9 +2444,9 @@ def _summarize_session_impl(
     context_encoded = json.dumps(context, separators=(',', ':'))
 
     # Step 4: Handle large transcriptions with chunking
-    CHUNK_SIZE = 40000  # ~10k tokens per chunk
-    OVERLAP_SIZE = 4000  # ~1k token overlap
-    LARGE_THRESHOLD = 200000  # ~50k tokens
+    CHUNK_SIZE = 400_000  # ~100k tokens per chunk (1M-token context window)
+    OVERLAP_SIZE = 20_000  # ~5k token overlap
+    LARGE_THRESHOLD = 2_400_000  # ~600k tokens: below this, send the whole transcript
 
     if len(transcription_text) > LARGE_THRESHOLD:
         logger.info(f"Large transcription detected ({len(transcription_text)} chars). Using chunking strategy.")
@@ -3941,7 +3941,7 @@ def _configure_claudmaster_impl(
 
 @mcp.tool
 def configure_claudmaster(
-    llm_model: Annotated[str | None, Field(description="LLM model identifier (e.g., 'claude-sonnet-4-5-20250929')")] = None,
+    llm_model: Annotated[str | None, Field(description="LLM model identifier (e.g., 'claude-opus-5-5')")] = None,
     temperature: Annotated[float | None, Field(description="LLM temperature (0.0-2.0)")] = None,
     max_tokens: Annotated[int | None, Field(description="Maximum tokens in LLM response (256-200000)")] = None,
     narrative_style: Annotated[str | None, Field(description="Narrative style: descriptive, concise, dramatic, cinematic, etc.")] = None,
@@ -4827,7 +4827,8 @@ def start_party_mode(
     try:
         from .prefetch import PrefetchEngine
         from .claudmaster.llm_client import AnthropicLLMClient
-        _haiku = AnthropicLLMClient(model="claude-haiku-4-5-20251001")
+        from .claudmaster.model_ids import HAIKU
+        _haiku = AnthropicLLMClient(model=HAIKU, effort="low", default_max_tokens=2048)
         server.prefetch_engine = PrefetchEngine(
             main_model=_haiku,
             refinement_model=_haiku,

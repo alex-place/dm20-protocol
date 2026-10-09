@@ -23,7 +23,7 @@ from ..orchestrator import (
 )
 from ..session import ClaudmasterSession
 from ..recovery.error_messages import ErrorMessageFormatter
-from .session_tools import _session_manager
+from .session_tools import _session_manager, mock_mode_warning
 
 logger = logging.getLogger("dm20-protocol")
 
@@ -101,6 +101,10 @@ class ActionResponse(BaseModel):
     turn_number: int = Field(
         default=0,
         description="Turn number when this action was processed"
+    )
+    mock_mode: bool = Field(
+        default=False,
+        description="True when no live Claude model is connected (placeholder output)"
     )
 
 
@@ -378,6 +382,12 @@ class ActionProcessor:
             session.metadata.pop("action_context", None)
             session.metadata.pop("style_preferences", None)
 
+            # Surface mock mode loudly instead of passing off placeholder text
+            mock_mode = bool(session.metadata.get("mock_mode"))
+            warnings = (
+                [mock_mode_warning(session.metadata.get("mock_reason"))] if mock_mode else []
+            )
+
             # Create response with intent classification metadata
             response = ActionResponse(
                 narrative=orchestrator_response.narrative,
@@ -388,7 +398,8 @@ class ActionProcessor:
                 follow_up_options=follow_up_options,
                 character_name=character_name,
                 turn_number=turn_number,
-                warnings=[]
+                warnings=warnings,
+                mock_mode=mock_mode,
             )
 
             # Return response as dict with added intent metadata (internal use)
