@@ -17,11 +17,21 @@ from pydantic import Field
 
 from .storage import DnDStorage
 from .models import (
+    ClassResource,
+    Combatant,
     Character, NPC, Location, Quest, SessionNote, AdventureEvent, EventType,
     AbilityScore, CharacterClass, Race, Item, Spell
 )
 from .character_builder import CharacterBuilder, CharacterBuilderError
-from .level_up_engine import LevelUpEngine, LevelUpError
+from .rules_math import DiceError, roll_expression, xp_for_cr
+from .level_up_engine import (
+    LevelUpEngine,
+    LevelUpError,
+    add_subclass_features,
+    apply_default_resources,
+    recompute_character_slots,
+    resolve_subclass,
+)
 from .rulebooks import RulebookManager
 from .rulebooks.sources.srd import SRDSource
 from .rulebooks.sources.custom import CustomSource
@@ -330,7 +340,7 @@ def create_character(
         except json.JSONDecodeError:
             return f"❌ Invalid additional_classes JSON: {additional_classes}"
 
-    builder = CharacterBuilder(storage.rulebook_manager)
+    builder = CharacterBuilder(storage.rulebook_manager, rules_version=storage.rules_version)
     try:
         character = builder.build(
             name=name,
@@ -380,6 +390,12 @@ def create_character(
     if character.spell_slots:
         slots_str = ", ".join(f"L{k}: {v}" for k, v in sorted(character.spell_slots.items()))
         populated.append(f"Spell slots: {slots_str}")
+    if character.pact_slots:
+        pact_str = ", ".join(f"{v} x L{k}" for k, v in sorted(character.pact_slots.items()))
+        populated.append(f"Pact slots (short rest): {pact_str}")
+    if character.resources:
+        res_str = ", ".join(f"{n} {r.max}" for n, r in character.resources.items())
+        populated.append(f"Resources: {res_str}")
     populated.append(f"HP: {character.hit_points_max}")
     populated.append(f"Speed: {character.speed}ft")
     populated.append(f"Prof bonus: +{character.proficiency_bonus}")
@@ -395,11 +411,14 @@ def create_character(
             f"{character.character_class.name}"
         )
 
-    return (
+    result = (
         f"✅ Created character '{character.name}' "
         f"({class_display} {character.race.name})\n\n"
         f"Auto-populated from rulebook:\n{summary}"
     )
+    if builder.warnings:
+        result += "\n\n⚠️ " + "\n⚠️ ".join(builder.warnings)
+    return result
 
 @mcp.tool
 def level_up_character(
@@ -411,11 +430,17 @@ def level_up_character(
     new_spells: Annotated[str | None, Field(description="JSON list of new spells learned: [\"fireball\", \"counterspell\"]")] = None,
     player_id: Annotated[str | None, Field(description="Player ID for permission check (omit for single-player DM mode)")] = None,
 ) -> str:
-    """Level up a character by one level.
+    """Level up a character by one level and save.
 
-    Increments level, calculates HP increase, adds class features, updates
-    spell slots for casters, handles ASI at appropriate levels, and manages
-    subclass selection. Requires a rulebook to be loaded.
+    Increments level, adds HP, hit dice, class and subclass features,
+    recomputes spell slots (standard 5e tables when the rulebook has none;
+    Pact Magic kept separate) and class resources, applies ASI choices, and
+    sets the subclass at the class's subclass level. Requires a loaded rulebook.
+
+    Atomic: on any error (unknown class, invalid subclass, bad ASI, level 20)
+    nothing is changed and the reply starts with '❌'. An invalid subclass error
+    lists the valid options; if the rulebook knows no subclasses for the class,
+    any name is accepted as free text with a warning.
 
     Multiclass: if class_name is a class the character doesn't have yet,
     this acts as a multiclass dip — adding that class at level 1.
@@ -450,7 +475,7 @@ def level_up_character(
         except json.JSONDecodeError:
             return f"❌ Invalid new_spells JSON: {new_spells}"
 
-    engine = LevelUpEngine(storage.rulebook_manager)
+    engine = LevelUpEngine(storage.rulebook_manager, rules_version=storage.rules_version)
     try:
         result = engine.level_up(
             character,
@@ -509,7 +534,25 @@ def get_character(
             used = character.spell_slots_used.get(level, 0)
             remaining = max_slots - used
             spell_slots_lines.append(f"  - Level {level}: {remaining}/{max_slots} remaining")
+    for level in sorted(character.pact_slots.keys()):
+        max_slots = character.pact_slots[level]
+        used = character.pact_slots_used.get(level, 0)
+        spell_slots_lines.append(
+            f"  - Pact (level {level}, short rest): {max_slots - used}/{max_slots} remaining"
+        )
     spell_slots_text = "\n".join(spell_slots_lines) if spell_slots_lines else "  (none)"
+
+    resources_lines = [
+        f"  - {res_name}: {res.current}/{res.max} (recharge: {res.recharge}"
+        + (f", short rest +{res.short_rest_regain}" if res.short_rest_regain else "")
+        + ")"
+        for res_name, res in character.resources.items()
+    ]
+    resources_text = "\n".join(resources_lines) if resources_lines else "  (none)"
+
+    subclass_parts = [f"{c.name}: {c.subclass}" for c in character.classes if c.subclass]
+    subclass_text = f"\n**Subclass:** {', '.join(subclass_parts)}" if subclass_parts else ""
+    multiclass_text = f"\n**Classes:** {character.class_string()}" if character.is_multiclass else ""
 
     # Build spells known details
     spells_lines = []
@@ -531,7 +574,7 @@ def get_character(
     save_profs_text = ", ".join(character.saving_throw_proficiencies) if character.saving_throw_proficiencies else "(none)"
 
     char_info = f"""**{character.name}** (`{character.id}`)
-Level {character.character_class.level} {character.race.name} {character.character_class.name}
+Level {character.character_class.level} {character.race.name} {character.character_class.name}{multiclass_text}{subclass_text}
 **Player:** {character.player_name or 'N/A'}
 **Background:** {character.background or 'N/A'}
 **Alignment:** {character.alignment or 'N/A'}
@@ -568,6 +611,9 @@ Level {character.character_class.level} {character.race.name} {character.charact
 
 **Spell Slots:**
 {spell_slots_text}
+
+**Class Resources:**
+{resources_text}
 
 **Spells Known:**
 {spells_text}
@@ -610,6 +656,85 @@ _LIST_OPERATIONS = {
 }
 
 _ABILITY_NAMES = {"strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"}
+
+
+def _parse_slot_json(value: str, param: str) -> dict[int, int]:
+    """Parse '{"1": 4, "2": 3}' into {1: 4, 2: 3}. Raises ValueError with a clear message."""
+    try:
+        data = json.loads(value)
+    except json.JSONDecodeError:
+        raise ValueError(f"Invalid {param} JSON: {value}. Expected e.g. '{{\"1\": 4, \"2\": 3}}'.")
+    if not isinstance(data, dict):
+        raise ValueError(f"{param} must be a JSON object mapping spell level to count.")
+    out: dict[int, int] = {}
+    for k, v in data.items():
+        try:
+            lvl, count = int(k), int(v)
+        except (TypeError, ValueError):
+            raise ValueError(f"{param}: level and count must be integers (got {k!r}: {v!r}).")
+        if not 1 <= lvl <= 9:
+            raise ValueError(f"{param}: spell level must be 1-9 (got {lvl}).")
+        if count < 0:
+            raise ValueError(f"{param}: count must be >= 0 (got {count} for level {lvl}).")
+        if count > 0 or param == "spell_slots_used":
+            out[lvl] = count
+    return out
+
+
+def _parse_resources_json(value: str, character: Character) -> dict[str, "ClassResource | None"]:
+    """Parse set_resources JSON into validated ClassResource objects (None = delete)."""
+    try:
+        data = json.loads(value)
+    except json.JSONDecodeError:
+        raise ValueError(f"Invalid set_resources JSON: {value}")
+    if not isinstance(data, dict):
+        raise ValueError("set_resources must be a JSON object: {name: {max, current, recharge} | null}.")
+    out: dict[str, ClassResource | None] = {}
+    for name, spec in data.items():
+        if spec is None:
+            if name not in character.resources:
+                raise ValueError(f"Cannot delete resource '{name}': not found. Existing: {', '.join(character.resources) or '(none)'}")
+            out[name] = None
+            continue
+        if not isinstance(spec, dict):
+            raise ValueError(f"Resource '{name}' must be an object like {{\"max\": 2, \"recharge\": \"short\"}} or null.")
+        unknown = set(spec) - {"max", "current", "recharge", "short_rest_regain"}
+        if unknown:
+            raise ValueError(f"Resource '{name}': unknown fields {sorted(unknown)}. Allowed: max, current, recharge, short_rest_regain.")
+        existing = character.resources.get(name)
+        merged = existing.model_dump() if existing else {}
+        if existing is None and "max" not in spec:
+            raise ValueError(f"New resource '{name}' needs a 'max'.")
+        merged.update(spec)
+        if existing is None and "current" not in spec:
+            merged["current"] = merged["max"]
+        try:
+            res = ClassResource(**merged)
+        except Exception as e:
+            raise ValueError(f"Resource '{name}' invalid: {e}")
+        if res.current > res.max:
+            raise ValueError(f"Resource '{name}': current ({res.current}) exceeds max ({res.max}).")
+        out[name] = res
+    return out
+
+
+def _class_defs_for(character: Character) -> dict:
+    """Map lowercase class name -> rulebook ClassDefinition for the character's classes."""
+    rm = storage.rulebook_manager
+    out: dict = {}
+    if rm is None or not rm.sources:
+        return out
+    for cls in character.classes:
+        cdef = rm.get_class(cls.name.strip().lower().replace(" ", "-"))
+        if cdef is not None:
+            out[cls.name.strip().lower()] = cdef
+    return out
+
+
+def _slots_summary(character: Character) -> str:
+    parts = [f"L{k}: {v}" for k, v in sorted(character.spell_slots.items())]
+    parts += [f"pact {v} x L{k}" for k, v in sorted(character.pact_slots.items())]
+    return ", ".join(parts)
 
 
 @mcp.tool
@@ -655,14 +780,24 @@ def update_character(
     remove_saving_throw_proficiencies: Annotated[str | None, Field(description="JSON list of saving throw proficiencies to remove")] = None,
     add_features_and_traits: Annotated[str | None, Field(description="JSON list of features/traits to add")] = None,
     remove_features_and_traits: Annotated[str | None, Field(description="JSON list of features/traits to remove")] = None,
+    # Subclass / spell slots / resources
+    subclass: Annotated[str | None, Field(description="Set the subclass (e.g. 'Battle Master', 'Echo Knight'). Validated against the rulebook's list for the class; free text with a warning if the rulebook lists none. Adds subclass features up to the current class level when the rulebook has them.")] = None,
+    subclass_class: Annotated[str | None, Field(description="Which class the subclass belongs to, for multiclass characters. Default: primary class.")] = None,
+    spell_slots: Annotated[str | None, Field(description='JSON object of MAX spell slots by spell level, replacing the current table, e.g. \'{"1": 4, "2": 3}\'. Used counts above the new max are clamped. Use \'{}\' to clear.')] = None,
+    spell_slots_used: Annotated[str | None, Field(description='JSON object of USED spell slots by level, e.g. \'{"1": 2}\'. Levels not listed are unchanged.')] = None,
+    set_resources: Annotated[str | None, Field(description='JSON object to create/update/delete class resources, e.g. \'{"Action Surge": {"max": 1, "current": 0, "recharge": "short"}, "Bite": {"max": 3, "recharge": "long"}, "Old Pool": null}\'. Fields merge into an existing resource; a new one needs "max" (current defaults to max); recharge is "short", "long" or "none"; null deletes.')] = None,
     player_id: Annotated[str | None, Field(description="Player ID for permission check (omit for single-player DM mode)")] = None,
 ) -> str:
-    """Update a character's properties.
+    """Update a character's properties and save.
 
-    Supports scalar field updates, ability score changes, and list add/remove
-    operations for conditions, proficiencies, languages, and features.
-    List parameters accept JSON arrays (e.g. '["poisoned","prone"]') or
-    comma-separated strings (e.g. 'poisoned,prone').
+    Supports scalar field updates, ability score changes, list add/remove
+    operations (conditions, proficiencies, languages, features), subclass,
+    spell-slot tables and class resources. List parameters accept JSON arrays
+    (e.g. '["poisoned","prone"]') or comma-separated strings. Changing
+    character_level also recomputes spell slots and default class resources.
+
+    Validation errors (bad JSON, invalid subclass) return a message starting
+    with '❌' and change nothing.
     """
     character = storage.get_character(name_or_id)
     if not character:
@@ -672,6 +807,51 @@ def update_character(
 
     messages = []
     all_params = locals()
+    direct_changes = False
+
+    # 0. Parse/validate JSON and subclass before any mutation.
+    parsed_slots: dict[int, int] | None = None
+    parsed_slots_used: dict[int, int] | None = None
+    parsed_resources: dict | None = None
+    try:
+        if spell_slots is not None:
+            parsed_slots = _parse_slot_json(spell_slots, "spell_slots")
+        if spell_slots_used is not None:
+            parsed_slots_used = _parse_slot_json(spell_slots_used, "spell_slots_used")
+        if set_resources is not None:
+            parsed_resources = _parse_resources_json(set_resources, character)
+    except ValueError as e:
+        return f"❌ {e}"
+
+    subclass_target = None
+    subclass_resolved = None
+    if subclass is not None:
+        if subclass_class:
+            subclass_target = next(
+                (c for c in character.classes if c.name.lower() == subclass_class.strip().lower()),
+                None,
+            )
+            if subclass_target is None:
+                return (
+                    f"❌ {character.name} has no class '{subclass_class}'. "
+                    f"Classes: {', '.join(c.name for c in character.classes)}"
+                )
+        else:
+            subclass_target = character.classes[0]
+        class_def = None
+        rm = storage.rulebook_manager
+        if rm is not None and rm.sources:
+            class_def = rm.get_class(subclass_target.name.strip().lower().replace(" ", "-"))
+        if class_def is not None:
+            try:
+                subclass_resolved = resolve_subclass(rm, class_def, subclass)
+            except LevelUpError as e:
+                return f"❌ {e}"
+        else:
+            subclass_resolved = (
+                subclass.strip(), None,
+                f"Class '{subclass_target.name}' not found in loaded rulebooks; stored subclass as free text.",
+            )
 
     # 1. Scalar field updates (passed to storage.update_character)
     scalar_fields = {
@@ -696,6 +876,65 @@ def update_character(
             messages.append(f"level: {old_level} → {character_level} (proficiency bonus → +{character.proficiency_bonus})")
         else:
             messages.append("⚠️ Cannot set level: character has no classes defined.")
+        if character.classes:
+            if recompute_character_slots(character, storage.rules_version, _class_defs_for(character)):
+                messages.append(f"spell slots recomputed: {_slots_summary(character)}")
+            res_changes = apply_default_resources(character, storage.rules_version)
+            if res_changes:
+                messages.append(f"resources: {', '.join(res_changes)}")
+            direct_changes = True
+
+    # 1c. Subclass
+    if subclass_resolved is not None and subclass_target is not None:
+        display, _index, warning = subclass_resolved
+        old_sub = subclass_target.subclass
+        subclass_target.subclass = display
+        messages.append(f"{subclass_target.name} subclass: {old_sub or '(none)'} → {display}")
+        if warning:
+            messages.append(f"⚠️ {warning}")
+        rm = storage.rulebook_manager
+        if rm is not None and rm.sources:
+            cdef = rm.get_class(subclass_target.name.strip().lower().replace(" ", "-"))
+            if cdef is not None:
+                feats = add_subclass_features(rm, character, cdef, display, 1, subclass_target.level)
+                if feats:
+                    messages.append(f"subclass features added: {', '.join(feats)}")
+        # Third casters (Eldritch Knight, Arcane Trickster) gain slots from their subclass.
+        if not character.spell_slots and recompute_character_slots(
+            character, storage.rules_version, _class_defs_for(character)
+        ):
+            messages.append(f"spell slots: {_slots_summary(character)}")
+        direct_changes = True
+
+    # 1d. Spell slots (explicit values win over recomputation above)
+    if parsed_slots is not None:
+        character.spell_slots = parsed_slots
+        character.spell_slots_used = {
+            lvl: min(used, parsed_slots[lvl])
+            for lvl, used in character.spell_slots_used.items() if lvl in parsed_slots
+        }
+        messages.append(f"spell slots: {_slots_summary(character) or '(none)'}")
+        direct_changes = True
+    if parsed_slots_used is not None:
+        for lvl, used in parsed_slots_used.items():
+            max_slots = character.spell_slots.get(lvl, 0)
+            character.spell_slots_used[lvl] = max(0, min(used, max_slots))
+        messages.append(
+            "spell slots used: "
+            + ", ".join(f"L{k}: {v}" for k, v in sorted(character.spell_slots_used.items()))
+        )
+        direct_changes = True
+
+    # 1e. Resources
+    if parsed_resources is not None:
+        for res_name, res in parsed_resources.items():
+            if res is None:
+                character.resources.pop(res_name, None)
+                messages.append(f"resource removed: {res_name}")
+            else:
+                character.resources[res_name] = res
+                messages.append(f"resource {res_name}: {res.current}/{res.max} ({res.recharge})")
+        direct_changes = True
 
     # 2. Ability score updates (need special handling via abilities dict)
     ability_updates = {
@@ -743,8 +982,8 @@ def update_character(
             if key != "abilities":
                 messages.append(f"{key.replace('_', ' ')}: {value}")
         storage.update_character(str(character.id), **scalar_updates)
-    elif list_params:
-        # Only list operations — save directly
+    elif list_params or direct_changes:
+        # Only list/direct operations — save directly
         storage.save()
 
     if not messages:
@@ -1033,17 +1272,39 @@ def _use_spell_slot_logic(character: Character, slot_level: int) -> str:
         return "❌ Spell slot level must be between 1 and 9."
 
     max_slots = character.spell_slots.get(slot_level, 0)
-    if max_slots == 0:
-        return f"❌ {character.name} has no level {slot_level} spell slots."
-
     used = character.spell_slots_used.get(slot_level, 0)
-    available = max_slots - used
-    if available <= 0:
-        return f"❌ {character.name} has no level {slot_level} spell slots remaining (0/{max_slots})."
+    if max_slots > 0 and max_slots - used > 0:
+        character.spell_slots_used[slot_level] = used + 1
+        remaining = max_slots - used - 1
+        return f"✅ {character.name} used a level {slot_level} spell slot ({remaining}/{max_slots} remaining)"
 
-    character.spell_slots_used[slot_level] = used + 1
-    remaining = available - 1
-    return f"✅ {character.name} used a level {slot_level} spell slot ({remaining}/{max_slots} remaining)"
+    # Fall back to Pact Magic slots (all at one level, which upcasts lower spells).
+    for pact_level in sorted(character.pact_slots):
+        if pact_level < slot_level:
+            continue
+        pact_max = character.pact_slots[pact_level]
+        pact_used = character.pact_slots_used.get(pact_level, 0)
+        if pact_max - pact_used > 0:
+            character.pact_slots_used[pact_level] = pact_used + 1
+            upcast = f", cast at level {pact_level}" if pact_level > slot_level else ""
+            return (
+                f"✅ {character.name} used a Pact Magic slot{upcast} "
+                f"({pact_max - pact_used - 1}/{pact_max} pact slots remaining; recharge on short rest)"
+            )
+
+    if max_slots == 0 and not character.pact_slots:
+        if not character.spell_slots:
+            return (
+                f"❌ {character.name} has no spell slots at all. If this character is a caster, "
+                "set them with update_character spell_slots='{\"1\": 2}'."
+            )
+        return f"❌ {character.name} has no level {slot_level} spell slots."
+    if max_slots == 0:
+        pact_text = ", ".join(
+            f"L{k}: {v - character.pact_slots_used.get(k, 0)}/{v}" for k, v in sorted(character.pact_slots.items())
+        )
+        return f"❌ {character.name} has no level {slot_level} spell slots available (pact slots: {pact_text})."
+    return f"❌ {character.name} has no level {slot_level} spell slots remaining (0/{max_slots})."
 
 
 @mcp.tool
@@ -1052,10 +1313,13 @@ def use_spell_slot(
     slot_level: Annotated[int, Field(description="Spell slot level to use (1-9)", ge=1, le=9)],
     player_id: Annotated[str | None, Field(description="Player ID for permission check (omit for single-player DM mode)")] = None,
 ) -> str:
-    """Use a spell slot, decrementing available slots for the given level.
+    """Expend one spell slot of slot_level and save.
 
-    Validates that the character has slots at this level and that at least
-    one is still available. Returns remaining slot count.
+    Uses a regular slot of exactly slot_level if one is left; otherwise a
+    Warlock Pact Magic slot of that level or higher (the spell is cast at the
+    pact slot's level). Returns remaining counts, or a '❌' message (nothing
+    changed) when no suitable slot is available. Slots return on long_rest
+    (pact slots also on short_rest).
     """
     character = storage.get_character(character_name_or_id)
     if not character:
@@ -1151,10 +1415,22 @@ def _long_rest_logic(character: Character, restore_hp: bool = True) -> str:
     """Core logic for long rest. Testable without MCP wrapper."""
     messages = []
 
-    # 1. Reset spell slots used
+    # 1. Reset spell slots used (regular and pact)
     if character.spell_slots:
         character.spell_slots_used = {level: 0 for level in character.spell_slots}
         messages.append("Spell slots restored")
+    if character.pact_slots:
+        character.pact_slots_used = {}
+        messages.append("Pact slots restored")
+
+    # 1b. Class resources with short or long recharge
+    restored = []
+    for res_name, res in character.resources.items():
+        if res.recharge in ("short", "long") and res.current < res.max:
+            res.current = res.max
+            restored.append(res_name)
+    if restored:
+        messages.append(f"Resources restored: {', '.join(restored)}")
 
     # 2. Restore hit dice (half of total, minimum 1)
     # hit_dice_remaining is stored as e.g. "3d10", total = total character level
@@ -1193,10 +1469,11 @@ def long_rest(
     restore_hp: Annotated[bool, Field(description="Restore HP to maximum (default: true)")] = True,
     player_id: Annotated[str | None, Field(description="Player ID for permission check (omit for single-player DM mode)")] = None,
 ) -> str:
-    """Perform a long rest for a character.
+    """Perform a long rest for a character and save.
 
-    Resets spell slots, restores hit dice (half of total, minimum 1),
-    clears death saves, and optionally restores HP to maximum.
+    Restores all spell slots and pact slots, refills every class resource with
+    recharge 'short' or 'long' (not 'none'), restores hit dice (half of total,
+    minimum 1), clears death saves, and optionally restores HP to maximum.
     """
     character = storage.get_character(character_name_or_id)
     if not character:
@@ -1208,21 +1485,44 @@ def long_rest(
     return result
 
 
+def _short_rest_recharge(character: Character) -> list[str]:
+    """Restore pact slots and short-rest resources. Returns message fragments."""
+    messages = []
+    if character.pact_slots and any(character.pact_slots_used.values()):
+        character.pact_slots_used = {}
+        messages.append("Pact slots restored")
+    restored = []
+    for res_name, res in character.resources.items():
+        if res.current >= res.max:
+            continue
+        if res.recharge == "short":
+            res.current = res.max
+            restored.append(f"{res_name} {res.current}/{res.max}")
+        elif res.recharge == "long" and res.short_rest_regain:
+            res.current = min(res.max, res.current + res.short_rest_regain)
+            restored.append(f"{res_name} {res.current}/{res.max}")
+    if restored:
+        messages.append(f"Resources recharged: {', '.join(restored)}")
+    return messages
+
+
 def _short_rest_logic(character: Character, hit_dice_to_spend: int) -> str:
     """Core logic for short rest. Testable without MCP wrapper."""
+    recharge = _short_rest_recharge(character)
+    recharge_text = f" ({'; '.join(recharge)})" if recharge else ""
     if hit_dice_to_spend == 0:
-        return f"✅ {character.name} completed a short rest (no hit dice spent)"
+        return f"✅ {character.name} completed a short rest (no hit dice spent){recharge_text}"
 
     # Parse hit_dice_remaining
     match = re.match(r'(\d+)d(\d+)', character.hit_dice_remaining)
     if not match:
-        return f"❌ {character.name} has no hit dice remaining."
+        return f"❌ {character.name} has no hit dice remaining.{recharge_text}"
 
     remaining = int(match.group(1))
     die_size = int(match.group(2))
 
     if remaining <= 0:
-        return f"❌ {character.name} has no hit dice remaining."
+        return f"❌ {character.name} has no hit dice remaining.{recharge_text}"
 
     dice_to_spend = min(hit_dice_to_spend, remaining)
     con_mod = character.abilities["constitution"].mod
@@ -1254,6 +1554,7 @@ def _short_rest_logic(character: Character, hit_dice_to_spend: int) -> str:
         f"[{rolls_text}]{con_text} = {total_healing} healing "
         f"(HP: {old_hp} → {character.hit_points_current}/{character.hit_points_max}, "
         f"hit dice remaining: {new_remaining}d{die_size})"
+        f"{recharge_text}"
     )
 
 
@@ -1263,10 +1564,12 @@ def short_rest(
     hit_dice_to_spend: Annotated[int, Field(description="Number of hit dice to spend for healing", ge=0)] = 0,
     player_id: Annotated[str | None, Field(description="Player ID for permission check (omit for single-player DM mode)")] = None,
 ) -> str:
-    """Perform a short rest for a character.
+    """Perform a short rest for a character and save.
 
-    Optionally spend hit dice to regain hit points. Each hit die rolled
-    adds 1dX + CON modifier HP (minimum 1 per die).
+    Restores Warlock pact slots and refills class resources with recharge
+    'short'; resources with recharge 'long' and a short_rest_regain value
+    regain that many uses (e.g. 2024 Second Wind). Optionally spend hit dice
+    to regain hit points: each die adds 1dX + CON modifier HP (minimum 1 per die).
     """
     character = storage.get_character(character_name_or_id)
     if not character:
@@ -1275,6 +1578,55 @@ def short_rest(
         return f"🔒 Permission denied: you cannot modify '{character.name}'."
     result = _short_rest_logic(character, hit_dice_to_spend)
     storage.save()
+    return result
+
+
+def _use_resource_logic(character: Character, resource: str, amount: int = 1) -> str:
+    """Core logic for use_resource. Testable without the MCP wrapper."""
+    key = next((k for k in character.resources if k.lower() == resource.strip().lower()), None)
+    if key is None:
+        existing = ", ".join(
+            f"{k} {r.current}/{r.max}" for k, r in character.resources.items()
+        ) or "(none)"
+        return (
+            f"❌ {character.name} has no resource '{resource}'. Existing: {existing}. "
+            "Create one with update_character set_resources='{\"Name\": {\"max\": 1, \"recharge\": \"short\"}}'."
+        )
+    res = character.resources[key]
+    if amount < 0 and res.current - amount > res.max:
+        return f"❌ Cannot restore {-amount} {key}: would exceed max ({res.current}/{res.max})."
+    if amount > res.current:
+        return f"❌ {character.name} has only {res.current}/{res.max} {key} left (needed {amount}). Nothing spent."
+    res.current -= amount
+    verb = "used" if amount >= 0 else "restored"
+    return (
+        f"✅ {character.name} {verb} {abs(amount)} {key} "
+        f"({res.current}/{res.max} remaining; recharge: {res.recharge})"
+    )
+
+
+@mcp.tool
+def use_resource(
+    character_name_or_id: Annotated[str, Field(description="Character name, ID, or player name")],
+    resource: Annotated[str, Field(description="Resource name, case-insensitive (e.g. 'Action Surge', 'Ki', 'Lay on Hands')")],
+    amount: Annotated[int, Field(description="Uses/points to spend (e.g. 5 HP from Lay on Hands). Negative restores, capped at max.", ge=-1000, le=1000)] = 1,
+    player_id: Annotated[str | None, Field(description="Player ID for permission check (omit for single-player DM mode)")] = None,
+) -> str:
+    """Spend uses of a limited class resource and save.
+
+    Fails with a '❌' message and changes nothing if the resource does not
+    exist or has fewer than `amount` left. Resources recharge on short_rest /
+    long_rest according to their recharge type. Create, edit or delete
+    resources with update_character set_resources.
+    """
+    character = storage.get_character(character_name_or_id)
+    if not character:
+        return f"❌ Character '{character_name_or_id}' not found."
+    if not permission_resolver.check_permission(player_id, "use_resource", str(character.id)):
+        return f"🔒 Permission denied: you cannot modify '{character.name}'."
+    result = _use_resource_logic(character, resource, amount)
+    if result.startswith("✅"):
+        storage.save()
     return result
 
 
@@ -3130,57 +3482,84 @@ def validate_character_rules(
 # ----------------------------------------------------------------------
 # Utility Tools
 # ----------------------------------------------------------------------
-@mcp.tool
-def roll_dice(
-    dice_notation: Annotated[str, Field(description="Dice notation (e.g., '1d20', '3d6+2')")],
-    advantage: Annotated[bool, Field(description="Roll with advantage")] = False,
-    disadvantage: Annotated[bool, Field(description="Roll with disadvantage")] = False,
-    label: Annotated[str, Field(description="Context label for the roll (e.g., 'Goblin Archer 2 attack vs Aldric')")] = "",
+def _format_dice_group(group) -> str:
+    """Render one rolled dice group, e.g. '4d6kh3 [6, 5, 3, 1] kept [6, 5, 3] = 14'."""
+    rolls = ", ".join(map(str, group.rolls))
+    text = f"{'-' if group.sign < 0 else ''}{group.notation} [{rolls}]"
+    if group.keep_mode:
+        text += f" kept [{', '.join(map(str, group.kept))}]"
+    return f"{text} = {group.subtotal}"
+
+
+def _roll_dice_logic(
+    dice_notation: str,
+    advantage: bool = False,
+    disadvantage: bool = False,
+    label: str = "",
 ) -> str:
-    """Roll dice with D&D notation."""
-    dice_notation = dice_notation.lower().strip()
-
-    # Parse dice notation (e.g., "1d20", "3d6+2", "2d8-1")
-    pattern = r'(\d+)d(\d+)([+-]\d+)?'
-    match = re.match(pattern, dice_notation)
-
-    if not match:
-        return f"Invalid dice notation: {dice_notation}"
-
-    num_dice = int(match.group(1))
-    die_size = int(match.group(2))
-    modifier = int(match.group(3)) if match.group(3) else 0
+    """Core logic for roll_dice. Testable without the MCP wrapper."""
+    notation = dice_notation.lower().strip()
+    try:
+        roll = roll_expression(notation, advantage=advantage, disadvantage=disadvantage)
+    except DiceError as e:
+        return f"❌ Invalid dice notation: {e}"
 
     label_prefix = f"{label} — " if label else ""
+    modifier = roll.modifier
+    modifier_text = f" {modifier:+d}" if modifier != 0 else ""
+    dice_groups = roll.dice_groups
 
-    # Roll dice
-    if advantage or disadvantage:
-        if num_dice != 1 or die_size != 20:
-            return "Advantage/disadvantage only applies to single d20 rolls"
+    if roll.advantage_rolls is not None:
+        r1, r2 = roll.advantage_rolls
+        kind = "Advantage" if advantage else "Disadvantage"
+        taken = max(r1, r2) if advantage else min(r1, r2)
+        roll_text = f"{kind}: {r1}, {r2} (taking {taken})"
+        others = [g for g in dice_groups if g is not roll.advantage_group]
+        extra = "".join(
+            f" {'-' if g.sign < 0 else '+'} [{', '.join(map(str, g.kept))}]" for g in others
+        )
+        line = f"🎲 {label_prefix}**{notation}** {roll_text}{extra}{modifier_text} = **{roll.total}**"
+        if others:
+            breakdown = [_format_dice_group(g) for g in dice_groups]
+            if modifier:
+                breakdown.append(f"modifier {modifier:+d}")
+            line += "\nBreakdown: " + "; ".join(breakdown)
+        return line
 
-        roll1 = random.randint(1, 20)
-        roll2 = random.randint(1, 20)
+    simple = len(dice_groups) == 1 and dice_groups[0].sign > 0 and not dice_groups[0].keep_mode
+    if simple:
+        rolls = dice_groups[0].rolls
+        rolls_text = ", ".join(map(str, rolls))
+        return f"🎲 {label_prefix}**{notation}** [{rolls_text}]{modifier_text} = **{roll.total}**"
 
-        if advantage:
-            result = max(roll1, roll2)
-            roll_text = f"Advantage: {roll1}, {roll2} (taking {result})"
-        else:
-            result = min(roll1, roll2)
-            roll_text = f"Disadvantage: {roll1}, {roll2} (taking {result})"
+    parts = []
+    for i, g in enumerate(dice_groups):
+        sign = "-" if g.sign < 0 else ("+" if i else "")
+        parts.append(f"{sign} [{', '.join(map(str, g.kept))}]".strip())
+    line = f"🎲 {label_prefix}**{notation}** {' '.join(parts)}{modifier_text} = **{roll.total}**"
+    breakdown = [_format_dice_group(g) for g in dice_groups]
+    if modifier:
+        breakdown.append(f"modifier {modifier:+d}")
+    return line + "\nBreakdown: " + "; ".join(breakdown)
 
-        total = result + modifier
-        modifier_text = f" {modifier:+d}" if modifier != 0 else ""
 
-        return f"🎲 {label_prefix}**{dice_notation}** {roll_text}{modifier_text} = **{total}**"
-    else:
-        rolls = [random.randint(1, die_size) for _ in range(num_dice)]
-        roll_sum = sum(rolls)
-        total = roll_sum + modifier
+@mcp.tool
+def roll_dice(
+    dice_notation: Annotated[str, Field(description="Dice expression: sums/differences of NdM groups and flat numbers, e.g. '1d20+5', '2d6+1d4+4', '4d6kh3' (keep highest 3), '2d20kl1' (keep lowest 1), 'd8', 'd%'.")],
+    advantage: Annotated[bool, Field(description="Roll the expression's single 1d20 term twice and keep the higher")] = False,
+    disadvantage: Annotated[bool, Field(description="Roll the expression's single 1d20 term twice and keep the lower")] = False,
+    label: Annotated[str, Field(description="Context label for the roll (e.g., 'Goblin Archer 2 attack vs Aldric')")] = "",
+) -> str:
+    """Roll dice with D&D notation. Pure: changes no game state.
 
-        rolls_text = ", ".join(map(str, rolls)) if num_dice > 1 else str(rolls[0])
-        modifier_text = f" {modifier:+d}" if modifier != 0 else ""
-
-        return f"🎲 {label_prefix}**{dice_notation}** [{rolls_text}]{modifier_text} = **{total}**"
+    Every term is rolled; a multi-term or keep-highest/lowest roll appends a
+    'Breakdown:' line with each group's dice and subtotal. Advantage and
+    disadvantage need exactly one 1d20 term (other terms, e.g. '+1d4' for
+    Bless, are allowed); both together cancel. Any text that is not a valid
+    term (e.g. '2d6+banana') returns an error starting with '❌' and rolls
+    nothing.
+    """
+    return _roll_dice_logic(dice_notation, advantage, disadvantage, label)
 
 @mcp.tool
 def calculate_experience(

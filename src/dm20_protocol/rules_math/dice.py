@@ -81,6 +81,7 @@ class DiceRoll:
     expression: str
     groups: list[DiceGroup]
     advantage_rolls: list[int] | None = None  # both d20s when adv/disadv was applied
+    advantage_group: DiceGroup | None = None  # the 1d20 group adv/disadv applied to
 
     @property
     def dice_groups(self) -> list[DiceGroup]:
@@ -174,6 +175,7 @@ def roll_expression(
     rng = rng or random.randint
     groups = parse_dice(expression)
     adv_rolls: list[int] | None = None
+    adv_group: DiceGroup | None = None
 
     if advantage and disadvantage:
         advantage = disadvantage = False
@@ -185,7 +187,7 @@ def roll_expression(
                 "Advantage/disadvantage requires exactly one 1d20 term in the expression "
                 f"(got '{expression}')."
             )
-        target = d20s[0]
+        target = adv_group = d20s[0]
         for g in groups:
             if g is not target and g.is_dice:
                 _roll_group(g, rng)
@@ -198,4 +200,4 @@ def roll_expression(
             if g.is_dice:
                 _roll_group(g, rng)
 
-    return DiceRoll(expression=expression, groups=groups, advantage_rolls=adv_rolls)
+    return DiceRoll(expression=expression, groups=groups, advantage_rolls=adv_rolls, advantage_group=adv_group)
