@@ -1162,7 +1162,9 @@ do_install_plugin() {
     fi
     info "Plugin marketplace: ${plugin_src}"
 
-    if claude plugin marketplace list 2>/dev/null | grep -q "$PLUGIN_MARKETPLACE"; then
+    local known_marketplaces
+    known_marketplaces="$(claude plugin marketplace list 2>/dev/null || true)"
+    if grep -q "$PLUGIN_MARKETPLACE" <<<"$known_marketplaces"; then
         claude plugin marketplace update "$PLUGIN_MARKETPLACE" >/dev/null 2>&1 || true
     elif ! claude plugin marketplace add "$plugin_src" >/dev/null 2>&1; then
         warn "claude plugin marketplace add ${plugin_src} failed."
