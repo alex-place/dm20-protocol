@@ -19,6 +19,12 @@ from dm20_protocol.models import (
 from dm20_protocol.storage import DnDStorage
 
 
+@pytest.fixture(autouse=True)
+def _restore_storage_env(monkeypatch: pytest.MonkeyPatch):
+    """write_checkpoint sets DM20_STORAGE_DIR; restore it after each test."""
+    monkeypatch.delenv("DM20_STORAGE_DIR", raising=False)
+
+
 def _character(name: str) -> Character:
     return Character(
         name=name,

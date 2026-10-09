@@ -198,7 +198,11 @@ def write_checkpoint(
         result.reason = f"no campaigns under {storage_dir}"
         return result
 
-    # Imported lazily so `--help` stays fast and a broken install fails softly.
+    # Importing the package also imports the server module, which builds its own
+    # storage from DM20_STORAGE_DIR at import time; point it at the same directory
+    # so it doesn't create data folders elsewhere. Imported lazily so `--help`
+    # stays fast and a broken install fails softly.
+    os.environ["DM20_STORAGE_DIR"] = str(storage_dir)
     from dm20_protocol.models import SessionNote
     from dm20_protocol.storage import DnDStorage
 
@@ -324,7 +328,8 @@ def main(argv: list[str] | None = None) -> int:
             dry_run=args.dry_run,
         )
     except Exception as exc:  # a hook must report, not crash with a traceback
-        print(f"dm20 checkpoint failed: {exc}", file=sys.stderr)
+        # stdout, because hooks discard the server's import-time log noise on stderr.
+        print(f"dm20 checkpoint failed: {exc}")
         return 1
 
     if args.dry_run:
