@@ -11,6 +11,8 @@ This document explains how the installer works, the design decisions behind it, 
 - [Two Modes, One Installer](#two-modes-one-installer)
 - [User Mode — The Player Experience](#user-mode--the-player-experience)
 - [Developer Mode — The Contributor Experience](#developer-mode--the-contributor-experience)
+- [Plugin Mode — The /dm Layer as a Claude Code Plugin](#plugin-mode--the-dm-layer-as-a-claude-code-plugin)
+- [Session Hooks — Checkpoint and Resume](#session-hooks--checkpoint-and-resume)
 - [How Mode Detection Works](#how-mode-detection-works)
 - [Prerequisite Resolution](#prerequisite-resolution)
 - [MCP Client Configuration](#mcp-client-configuration)
@@ -82,6 +84,7 @@ install.sh
 ```
 ~/.local/bin/
   dm20-protocol              <-- executable wrapper (created by uv tool install)
+  dm20-checkpoint            <-- checkpoint CLI used by the PreCompact hook
 
 ~/.local/share/uv/tools/
   dm20-protocol/             <-- isolated virtualenv (managed by uv, invisible)
@@ -89,19 +92,17 @@ install.sh
 ~/dm20/                      <-- the play directory
   .mcp.json                  <-- MCP config for Claude Code
   .claude/
+    settings.json            <-- PreCompact checkpoint + SessionStart resume hooks
     dm-persona.md            <-- DM personality and game loop rules
     agents/
-      narrator.md            <-- narrative agent template
-      combat-handler.md      <-- combat agent template
-      rules-lookup.md        <-- rules agent template (haiku)
+      narrator.md            <-- narrative agent template (model + effort)
+      combat-handler.md      <-- combat agent template (model + effort)
+      rules-lookup.md        <-- rules agent template (model + effort)
     commands/
       dm/
         start.md             <-- /dm:start command
         action.md            <-- /dm:action command
-        combat.md            <-- /dm:combat command
-        save.md              <-- /dm:save command
-        profile.md           <-- /dm:profile command
-        help.md              <-- /dm:help command
+        ...                  <-- the other /dm:* commands (17 in total)
   data/
     campaigns/               <-- your campaign files live here
     library/
@@ -226,6 +227,73 @@ For **Claude Desktop** (no `cwd` — uses `--directory` instead):
   }
 }
 ```
+
+---
+
+## Plugin Mode — The /dm Layer as a Claude Code Plugin
+
+By default the installer copies the `/dm:*` commands, the DM persona and the session hooks into the play directory's `.claude/`. With `--plugin` it installs them as a Claude Code plugin instead:
+
+```bash
+bash install.sh --plugin                 # fresh user-mode install
+bash install.sh --upgrade --plugin       # switch an existing play directory to the plugin
+```
+
+### What the plugin contains
+
+The plugin lives in the repository at `plugin/`, which is also a plugin marketplace:
+
+```
+plugin/
+  .claude-plugin/marketplace.json   <-- marketplace "dm20-protocol"
+  build_plugin.py                   <-- generates plugin/dm/ from .claude/
+  dm/                               <-- the plugin "dm"
+    .claude-plugin/plugin.json
+    commands/*.md                   <-- the 17 /dm:* commands
+    dm-persona.md                   <-- loaded by the commands via ${CLAUDE_PLUGIN_ROOT}
+    agent-templates/*.md            <-- narrator, combat-handler, rules-lookup
+    hooks/hooks.json                <-- PreCompact + SessionStart(compact)
+    hooks/precompact.sh
+    hooks/session-start.sh
+```
+
+The plugin is named `dm`, so its commands keep their names: `/dm:start`, `/dm:action` and so on.
+
+`.claude/` remains the single source of truth. After changing a command, the persona or an agent, run `python plugin/build_plugin.py`; `python plugin/build_plugin.py --check` (run in CI and by `tests/test_plugin_package.py`) fails when `plugin/dm/` is out of date. The plugin version comes from `pyproject.toml`, so rebuild after a version bump too.
+
+### What the installer does
+
+1. Finds the plugin sources: `plugin/` next to `install.sh` when run from a clone, otherwise a shallow clone kept in `~/.dm20-protocol/src` (updated with `git pull` on later runs).
+2. Registers the marketplace (`claude plugin marketplace add <path>/plugin`, or `marketplace update` if it is already known).
+3. Runs `claude plugin install dm@dm20-protocol --scope project` from the play directory, so the plugin is enabled for that directory only (recorded in `.claude/settings.json`).
+4. Copies the agent templates into the play directory's `.claude/agents/`. They stay project files on purpose: `/dm:profile` rewrites their `model:` and `effort:` lines, which it cannot do inside the plugin cache.
+5. Removes the copied `.claude/commands/dm/` and `dm-persona.md` and the dm20 entries in `.claude/settings.json`, so commands and hooks are not defined twice. When upgrading, all of it is in the timestamped backup first.
+
+If the `claude` CLI or git is missing, or a `claude plugin` command fails, the installer says so and falls back to copy mode. Copy mode remains the default.
+
+To do the same by hand:
+
+```bash
+claude plugin marketplace add /path/to/dm20-protocol/plugin
+cd ~/dm20
+claude plugin install dm@dm20-protocol --scope project
+cp /path/to/dm20-protocol/plugin/dm/agent-templates/*.md .claude/agents/
+```
+
+---
+
+## Session Hooks — Checkpoint and Resume
+
+Both modes install the same two hooks (copy mode in `.claude/settings.json`, plugin mode in `hooks/hooks.json`):
+
+| Hook | What it does |
+|---|---|
+| `PreCompact` | Runs `dm20-checkpoint`, which reads the stored game state (no LLM) and writes an "auto-checkpoint" session note with the location, in-game date, party HP and the last 10 events, plus `.claude/last-campaign.txt`. It always exits 0, so it never blocks compaction. |
+| `SessionStart` (matcher `compact`) | If `.claude/last-campaign.txt` exists, deletes it and tells Claude to resume with `/dm:start <campaign>`. |
+
+`dm20-checkpoint` (also `python -m dm20_protocol.checkpoint`) finds the data directory from `--storage-dir`, then `DM20_STORAGE_DIR`, then the `dm20-protocol` server's `env` in the play directory's `.mcp.json`, then `DM20_STORAGE_DIR` in `.env`, then `<play dir>/data`. `--campaign-dir` is the play directory (default: `$CLAUDE_PROJECT_DIR`, else the current directory). It is idempotent: running it again rewrites the same note, and if `/dm:save` already wrote a note for the session, the checkpoint is attached to that note's `notes` field instead of replacing it.
+
+The copy-mode installer merges these hooks into an existing `settings.json`: it replaces only dm20's own entries and keeps your other settings and hooks.
 
 ---
 
@@ -439,8 +507,8 @@ If multiple play directories are found, it asks you to choose. If none are found
 
 The upgrade:
 1. Upgrades the Python package via `uv tool upgrade dm20-protocol`
-2. Backs up existing `.claude/` config files (timestamped backup directory)
-3. Downloads latest slash commands (`.claude/commands/dm/`), DM persona, and agent templates from GitHub
+2. Backs up existing `.claude/` config files, including `settings.json` (timestamped backup directory)
+3. Copy mode: downloads the latest slash commands (`.claude/commands/dm/`), DM persona and agent templates, and merges the session hooks into `settings.json`. Plugin mode (`--plugin`, or a play directory that already has the `dm` plugin enabled): updates the plugin and refreshes the agent templates instead.
 4. Your campaign data in `~/dm20/data/` is untouched
 
 If you only need to update the Python server (no command/persona changes):
@@ -466,9 +534,10 @@ In Developer mode, the `.claude/` files are part of the repository and are updat
 |---|---|---|---|
 | Python server code | Yes | Yes | Yes (dev) |
 | MCP tools (50+) | Yes | Yes | Yes (dev) |
-| Slash commands (`/dm:*`) | Yes | No | Yes (dev) |
-| DM persona | Yes | No | Yes (dev) |
+| Slash commands (`/dm:*`) | Yes (copied, or via the plugin) | No | Yes (dev) |
+| DM persona | Yes (copied, or via the plugin) | No | Yes (dev) |
 | Agent templates | Yes | No | Yes (dev) |
+| Session hooks | Yes (merged into `settings.json`, or via the plugin) | No | Yes (dev) |
 | Campaign data | Never | Never | Never |
 
 ---
