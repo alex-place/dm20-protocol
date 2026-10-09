@@ -1,0 +1,14 @@
+{
+  "name": "dm20-protocol",
+  "description": "Claude Code plugins for dm20-protocol, an AI Dungeon Master for D&D 5e.",
+  "owner": {
+    "name": "Polloinfilzato"
+  },
+  "plugins": [
+    {
+      "name": "dm",
+      "source": "./dm",
+      "description": "/dm slash commands, the DM persona, and PreCompact/SessionStart hooks that checkpoint and resume the campaign around context compaction. Requires the dm20-protocol MCP server."
+    }
+  ]
+}

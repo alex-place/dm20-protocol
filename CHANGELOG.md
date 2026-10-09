@@ -21,6 +21,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Claude Code layer (Opus 5.5)
+- **Added: automatic checkpoint on compaction** — new `dm20-checkpoint` command (`python -m dm20_protocol.checkpoint`) writes an "auto-checkpoint" session note from stored game state (location, in-game date, party HP, last N events) and `.claude/last-campaign.txt`, with no LLM call. The PreCompact hook now runs it instead of only printing a warning, so `/compact` (manual or automatic) no longer loses the session; the SessionStart hook resumes the campaign as before. Idempotent, and merges into an existing `/dm:save` note instead of replacing it
+- **Added: `dm` Claude Code plugin** — `plugin/` is a marketplace (`dm20-protocol`) with the `dm` plugin: the `/dm:*` commands, DM persona, agent templates and hooks in `hooks.json`. `bash install.sh --plugin` (or `--upgrade --plugin`) installs it per project with `claude plugin install`; copy mode remains the default. `plugin/build_plugin.py` generates the plugin from `.claude/`, and `--check` guards against drift
+- **Added: test CI** — `.github/workflows/test.yml` runs pytest on Ubuntu with Python 3.12 and uv, plus the plugin sync check
+- **Changed: prompt audit for Opus 5.5** — `dm-persona.md`, the agents and the `/dm` commands rewritten without caps walls, duplicated loop descriptions and per-model style sections (about 25% fewer words overall); see `docs/PROMPT_AUDIT.md`. The persona now covers `update_combatant` for monsters, `use_resource` for class resources, mixed dice expressions, the `name_or_id` / `character_name_or_id` split, and asking before spending a player's resource only when the player asked for that
+- **Changed: agent frontmatter** — every agent declares `effort:` next to `model:` (narrator and combat-handler `opus`/`medium`, rules-lookup `haiku`/`low`), ready for `/dm:profile` to rewrite. Tighter descriptions and tool allowlists; the narrator is read-only, the combat-handler gains `combat_action`, `update_combatant`, `use_resource`, `use_spell_slot`, effects and death saves
+- **Changed: context guidance** — the persona no longer asks the DM to watch for "25-30 exchanges" and run `/dm:refrill`; refrill is a manual safety net, and its closing message is now English by default instead of hardcoded Italian
+- **Changed: installer hooks are merged** — install and `--upgrade` merge dm20's hooks into `.claude/settings.json` instead of overwriting the file, and back it up first
+
 ### Fixed
 - **Inconsistent MCP tool parameter names** — `apply_effect` and `remove_effect` used `character_name` while all other character tools used `character_name_or_id`, causing AI callers to mix up parameter names. Renamed to `character_name_or_id` for consistency
 - **`add_item_to_character` item_type too restrictive** — `item_type` was a `Literal["weapon", "armor", "consumable", "misc"]` but the `Item` model accepts any string. Changed to `str` so AI callers can use values like `"treasure"`, `"tool"`, `"quest"`, etc.

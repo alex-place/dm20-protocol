@@ -5,56 +5,26 @@ allowed-tools: AskUserQuestion
 
 # DM Help — Onboarding & Command Reference
 
-Guide new users through dm20-protocol or show the command reference to experienced users.
+Ask with `AskUserQuestion` (header "Experience", question "Welcome to dm20-protocol! How can I help you?"): "I'm new here", "Show me the commands", or "I want to start playing". For the first, give the onboarding and then the command reference; for the second, the reference only; for the third, tell them to run `/dm:start`.
 
-## Instructions
+## Onboarding
 
-### Step 1: Quick Assessment
+Explain conversationally:
 
-Use `AskUserQuestion` to determine the user's experience level:
-
-```
-Question: "Welcome to dm20-protocol! How can I help you?"
-Header: "Experience"
-Options:
-  - "I'm new here" → Full onboarding flow (Step 2)
-  - "Show me the commands" → Command reference (Step 3)
-  - "I want to start playing" → Tell them to run /dm:start
-```
-
-### Step 2: Onboarding for New Users
-
-Present the following information conversationally:
-
-**What is dm20-protocol?**
-An AI-powered Dungeon Master for D&D 5e. It manages campaigns, characters, combat, and narration — all from your terminal. You play, the AI handles everything behind the DM screen.
-
-**Game Modes:**
+**What it is.** An AI Dungeon Master for D&D 5e that manages campaigns, characters, combat and narration from the terminal. The player plays; the AI handles everything behind the screen.
 
 | Mode | Description |
 |------|-------------|
 | **SOLO** | You + AI companions + AI DM. The AI controls companion PCs autonomously — you can suggest actions but they decide for themselves. |
 | **HUMAN PARTY** | Multiple human players + AI DM. Players connect via their phone/browser using QR codes. The DM processes actions from a shared queue. |
 
-**What you need to start:**
-1. A **campaign** — create one or load a published adventure module (e.g., Descent Into Avernus, Curse of Strahd)
-2. A **character** — create from scratch with the guided wizard, or import directly from D&D Beyond
-3. Optionally: **AI companions** for SOLO mode, or **Party Mode** for HUMAN PARTY
-
-**Quick start path:**
-Run `/dm:start` and the wizard will guide you through everything: campaign selection, adventure module loading, character creation (with D&D Beyond import option), and game mode setup.
-
-Then show the command reference from Step 3.
+**What you need:** a campaign (create one, or load a published adventure such as Descent Into Avernus or Curse of Strahd), a character (build one with the wizard or import from D&D Beyond), and optionally AI companions (SOLO) or Party Mode (HUMAN PARTY). `/dm:start` walks through all of it.
 
 End with: **"Ready to play? Run `/dm:start` to begin your adventure!"**
 
-### Step 3: Command Reference
+## Command reference
 
-Show the following tables organized by category:
-
-## Core Gameplay
-
-The essential commands for playing D&D.
+### Core Gameplay
 
 | Command | Description |
 |---------|-------------|
@@ -64,9 +34,7 @@ The essential commands for playing D&D.
 | `/dm:save` | Save session state and create session notes with a narrative stopping point. |
 | `/dm:campaigns [action]` | Manage campaigns: list, load, create, or delete. |
 
-## Party Mode (Multiplayer)
-
-Commands for running multi-player sessions. Players connect via phone/browser with QR codes.
+### Party Mode (Multiplayer)
 
 | Command | Description |
 |---------|-------------|
@@ -78,22 +46,23 @@ Commands for running multi-player sessions. Players connect via phone/browser wi
 | `/dm:party-token <player>` | Generate a new token and QR code for a player (invalidates old). |
 | `/dm:party-stop` | Shut down the Party Mode server and disconnect all players. |
 
-## Utility
+### Utility
 
 | Command | Description |
 |---------|-------------|
-| `/dm:profile <tier>` | Switch model quality: `quality`, `balanced`, or `economy`. |
+| `/dm:profile [tier] [style...]` | Switch model profile (`quality`, `balanced`, `economy`), narration, dialogue and interaction mode. |
+| `/dm:refrill` | Save and checkpoint manually before `/compact` (compaction also checkpoints automatically). |
 | `/dm:release-notes` | Show installed version, latest version, and what's new. |
 | `/dm:install-rag` | Install RAG dependencies (ChromaDB + ONNX embeddings) for vector search on PDF rulebooks. |
 | `/dm:help` | This help overview. |
 
 ### Tips
 
-- **Natural language actions:** Describe what you do in plain language — "I search the room for traps", "I try to persuade the guard"
-- **Context management:** When the conversation gets long, `/dm:save` → `/clear` → `/dm:start` to reload with a fresh context
-- **Character info:** Use the `get_character` MCP tool anytime to check your stats, HP, inventory
-- **D&D Beyond import:** During character creation, you can paste a D&D Beyond URL to import a character directly
-- **Adventure modules:** `/dm:start` offers published adventures from 5etools — choose "Adventure module" during setup
-- **SOLO companions:** AI companions act on their own — you can suggest actions but they make their own decisions
-- **Party Mode flow:** Start with `/dm:party-mode`, share QR codes, then use `/dm:party-next` or `/dm:party-auto` to process player actions
-- **Stay updated:** `/dm:release-notes` shows what's new; the system notifies you automatically when an update is available
+- **Natural language actions:** describe what you do in plain language — "I search the room for traps", "I try to persuade the guard".
+- **Long sessions:** just keep playing. When the conversation fills up, Claude Code compacts it and the campaign checkpoints and resumes on its own. `/dm:save` marks a story break.
+- **Character info:** the `get_character` tool shows stats, HP and inventory at any time.
+- **D&D Beyond import:** during character creation, paste a D&D Beyond URL to import a character.
+- **Adventure modules:** choose "Adventure module" in `/dm:start` to play a published adventure indexed from 5etools.
+- **SOLO companions:** AI companions act on their own; you can suggest, they decide.
+- **Party Mode flow:** start with `/dm:party-mode`, share the QR codes, then run `/dm:party-auto` (or `/dm:party-next` one action at a time).
+- **Stay updated:** `/dm:release-notes` shows what's new; `/dm:start` tells you when an update is available.

@@ -1,0 +1,38 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen --all-groups
+
+      - name: Check the Claude Code plugin is in sync with .claude/
+        run: uv run --frozen python plugin/build_plugin.py --check
+
+      # pytest-timeout is added for this run only, so a hung test fails fast
+      # instead of holding the runner until the job timeout.
+      - name: Run tests
+        run: uv run --frozen --with pytest-timeout pytest -q --timeout=300

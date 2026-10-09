@@ -1,0 +1,4 @@
+# Hook scripts run under bash on every platform; keep LF endings.
+*.sh text eol=lf
+*.json text eol=lf
+*.md text eol=lf

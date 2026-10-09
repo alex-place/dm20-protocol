@@ -54,11 +54,11 @@ DM20 Protocol works with any MCP-compatible client, but the experience differs s
 
 ### Slash Commands vs Natural Language
 
-Each `/dm:*` slash command injects ~300 lines of context-specific instructions and the full DM persona into Claude's prompt. This ensures the AI follows the exact right protocol for each situation — combat, exploration, social — and restricts tool access to only what's relevant. Without slash commands, the AI relies solely on the system prompt and has to figure out which of the 86 tools to chain together on its own.
+Each gameplay `/dm:*` slash command injects the full DM persona plus instructions specific to that command into Claude's prompt. This ensures the AI follows the exact right protocol for each situation — combat, exploration, social — and restricts tool access to only what's relevant. Without slash commands, the AI relies solely on the system prompt and has to figure out which of the 86 tools to chain together on its own.
 
 | Approach | Quality | How it works |
 |----------|---------|-------------|
-| **Claude Code + slash commands** | Best | Each command injects the full DM persona + situation-specific instructions + restricted tool access + dual-agent architecture |
+| **Claude Code + slash commands** | Best | Each command injects the full DM persona + situation-specific instructions + restricted tool access + specialist subagents |
 | **Any MCP client + natural language** | Good | AI uses the system prompt + all 86 tools, but may miss steps or lack the structured game loop |
 
 **Slash commands are not shortcuts — they fundamentally change the quality of the AI's output.** A single `/dm:combat I attack` delivers a detailed combat protocol with enemy tactics, death saves, and turn-by-turn resolution. Typing "I attack" in Claude Desktop gives the AI only the system prompt to work from.
@@ -131,19 +131,26 @@ For **every player action**, follow this five-step sequence:
 - No mechanic? (pure narration for safe/trivial actions)
 
 ### 3. EXECUTE — Call the tools to resolve it
-- `roll_dice` — for all checks, attacks, damage, saves. Always roll; never assume results. **Always provide a `label`** (e.g., `label="Aldric Perception check"`)
+- `roll_dice` — for all checks, attacks, damage, saves; roll rather than assume results, and give every roll a `label` (e.g., `label="Aldric Perception check"`). Mixed expressions such as `2d6+1d4+3` work in one call.
 - `search_rules` / `get_spell_info` / `get_monster_info` — look up rules when uncertain
 - `start_combat` / `next_turn` / `end_combat` — manage combat state
 - `combat_action` — resolve attacks and spells mechanically
 - `apply_effect` / `remove_effect` — manage buffs, debuffs, conditions
 
 ### 4. PERSIST — Update game state BEFORE narrating (state-first, story-second)
-- `update_character` — HP changes, conditions, level ups
+- `update_character` — PC HP changes, conditions, level ups
+- `use_spell_slot` / `use_resource` — spell slots and class resources (Action Surge, Channel Divinity, Ki...); `short_rest` / `long_rest` recharge them
+- `update_combatant` — monster and NPC combatant HP and conditions during a fight (never track them in free-text notes)
 - `add_item_to_character` — loot, quest items, purchases
+- `update_npc` — NPC attitude, location, relationships
 - `update_game_state` — location changes, combat flags, in-game date
 - `update_quest` — objective completion, status changes
 - `add_event` — log significant moments to adventure history
 - `create_npc` / `create_location` — when the player discovers new entities
+
+`get_character`, `update_character` and `get_npc` take `name_or_id`; `use_spell_slot`, the rests, `add_death_save` and the effect tools take `character_name_or_id`.
+
+When the player declares an action that spends a resource, spend it. Ask first only for resources the player has asked to be consulted about.
 
 ### 5. NARRATE — Describe the outcome
 Only the story reaches the player — mechanics stay behind the screen.
@@ -195,7 +202,7 @@ Only the story reaches the player — mechanics stay behind the screen.
 
 **Turn flow:** `next_turn` to advance. Player turns: wait for action, then resolve. Enemy turns: decide tactically, execute, narrate.
 
-**Attack resolution:** `roll_dice` 1d20 + modifier vs target AC (with `label`). On hit: roll damage. `update_character` to apply HP changes. Narrate the blow.
+**Attack resolution:** `roll_dice` 1d20 + modifier vs target AC (with `label`). On hit: roll damage. Apply it with `update_character` (PCs) or `update_combatant` (monsters). Narrate the blow.
 
 **Enemy tactics:**
 - Brutes: attack nearest, fight to the death
@@ -244,20 +251,37 @@ DM20 includes a complete AI Dungeon Master for solo D&D play. See [How to Use DM
 
 1. `/dm:start` loads the campaign and activates the DM persona (`.claude/dm-persona.md`)
 2. Claude follows the game loop: **CONTEXT → DECIDE → EXECUTE → PERSIST → NARRATE**
-3. A **dual-agent architecture** runs in parallel on every player action:
-   - **Narrator** (Haiku — fast, creative) — Scene descriptions, NPC dialogue, atmosphere
-   - **Arbiter** (Sonnet — thorough, rules-focused) — Mechanical resolution, dice rolls, rule adjudication
-   - A Python-side **Archivist** handles data retrieval and game state tracking without consuming LLM tokens
+3. For bigger moments the DM hands off to Claude Code subagents in `.claude/agents/`:
+   - **narrator** — scene descriptions, NPC dialogue, atmosphere (read-only; returns new facts for the DM to persist)
+   - **combat-handler** — initiative, enemy tactics and turn resolution, persisting HP, resources and conditions
+   - **rules-lookup** — exact rules, stat blocks and rulings from the loaded rulebooks
+
+   Each agent file carries `model:` and `effort:` frontmatter. `/dm:profile` rewrites both:
+
+   | Profile | narrator / combat-handler | rules-lookup |
+   |---|---|---|
+   | quality | `opus` · `high` | `sonnet` · `medium` |
+   | balanced (default) | `opus` · `medium` | `haiku` · `low` |
+   | economy | `opus` · `low` | `haiku` · `low` |
+
+   The autonomous Claudmaster mode (Python-side Narrator, Arbiter and Archivist) is configured separately through `configure_claudmaster`.
 4. `/dm:save` persists all state to the backend for later resumption
 
 ### Context Management
 
-Game sessions consume context window quickly. When context reaches ~50-60%, save and reload:
+Keep playing. Claude Code's context window is large, and when it fills up Claude Code compacts the conversation automatically. Because the game state lives in the MCP server, compaction only loses what was never persisted, and the installed hooks cover the rest:
+
+- **PreCompact** runs `dm20-checkpoint`, which writes an "auto-checkpoint" session note from stored state (location, in-game date, party HP, the last 10 events) and records the campaign in `.claude/last-campaign.txt`. No model is involved, so it costs nothing and cannot fail on a full context.
+- **SessionStart** (after compaction) reads that file and resumes the campaign with `/dm:start`.
+
+Use `/dm:save` at natural story breaks. `/dm:refrill` remains as a manual safety net: a full narrative save before you type `/compact`, for when you want a clean break or the hooks are not installed.
+
+You can run the checkpoint yourself from the play directory:
 
 ```
-/dm:save              → save session state
-/clear                → clear Claude's context
-/dm:start Campaign    → reload everything with recap
+dm20-checkpoint                    # or: python -m dm20_protocol.checkpoint
+dm20-checkpoint --dry-run          # print the note without writing it
+dm20-checkpoint --campaign-dir ~/dm20 --storage-dir ~/dm20/data --events 20
 ```
 
 For detailed instructions, see the [Player Guide](PLAYER_GUIDE.md).

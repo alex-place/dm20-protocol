@@ -4,6 +4,10 @@
 # Or:    bash install.sh           (from the repo root)
 # Or:    bash install.sh --upgrade [play_dir]   (update existing install — auto-detects play dir)
 # Or:    bash install.sh --voice   [play_dir]   (add TTS voice narration support)
+#
+# Add --plugin to a fresh user-mode install or to --upgrade to install the /dm
+# commands, persona and hooks as the Claude Code plugin "dm" (see plugin/)
+# instead of copying them into the play directory's .claude/.
 
 set -euo pipefail
 
@@ -14,6 +18,10 @@ _remote_ver=$(curl -fsSL "${RAW_BASE}/pyproject.toml" 2>/dev/null | grep -E '^ve
 VERSION="${_remote_ver:-0.3.0}"  # Fallback if fetch fails
 UPGRADE_MODE=false       # true when running with --upgrade flag
 VOICE_MODE=false         # true when running with --voice flag
+PLUGIN_MODE=false        # true when running with --plugin flag
+PLUGIN_NAME="dm"                     # plugin name (commands become /dm:*)
+PLUGIN_MARKETPLACE="dm20-protocol"   # marketplace name in plugin/.claude-plugin/marketplace.json
+PLUGIN_SRC_DIR="${HOME}/.dm20-protocol/src"  # local clone used as the marketplace source
 
 # ─── Global State ─────────────────────────────────────────────────────────────
 
@@ -960,12 +968,14 @@ except Exception:
                     agents_ok=false
                     # Fallback: create minimal template
                     local agent_name="${agent_file%.md}"
-                    local model="sonnet"
-                    [[ "$agent_name" == "rules-lookup" ]] && model="haiku"
+                    local model="opus" effort="medium"
+                    [[ "$agent_name" == "rules-lookup" ]] && model="haiku" && effort="low"
+                    [[ "$agent_name" == "python-pro" ]] && model="sonnet"
                     cat > "$target" << AGENTEOF
 ---
 name: ${agent_name}
 model: ${model}
+effort: ${effort}
 ---
 AGENTEOF
                 fi
@@ -976,6 +986,14 @@ AGENTEOF
         else
             warn "Some agent templates could not be downloaded — minimal templates created instead."
         fi
+    fi
+
+    # ── Plugin mode: commands, persona and hooks come from the "dm" plugin ─────
+    if [[ "$PLUGIN_MODE" == true ]]; then
+        if do_install_plugin "$PLAY_DIR"; then
+            return 0
+        fi
+        warn "Falling back to copying the commands into ${PLAY_DIR}/.claude/"
     fi
 
     # ── Slash commands (/dm:*) and DM persona ──────────────────────────────────
@@ -1032,38 +1050,150 @@ AGENTEOF
     fi
 
     # ── Project settings (hooks for session management) ────────────────────
-    local settings_target="${PLAY_DIR}/.claude/settings.json"
-    if [[ ! -f "$settings_target" ]]; then
-        info "Creating project settings (PreCompact + SessionStart hooks)..."
-        cat > "$settings_target" << 'SETTINGSEOF'
-{
-  "hooks": {
-    "PreCompact": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "echo '⚠️ Context compaction triggered. Run /dm:refrill to save session before context is lost.'"
-          }
-        ]
-      }
-    ],
-    "SessionStart": [
-      {
-        "matcher": "compact",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash -c 'f=\".claude/last-campaign.txt\"; if [ -f \"$f\" ]; then campaign=$(cat \"$f\"); rm -f \"$f\"; echo \"🎲 Session checkpoint detected for campaign: $campaign. Auto-resuming — invoke /dm:start $campaign now.\"; fi'"
-          }
-        ]
-      }
-    ]
-  }
+    info "Adding PreCompact checkpoint + SessionStart resume hooks to project settings..."
+    write_dm20_hooks "${PLAY_DIR}/.claude/settings.json" install
+    success "Project settings updated"
 }
-SETTINGSEOF
-        success "Project settings created"
+
+# ─── Session hooks (legacy copy mode) ──────────────────────────────────────────
+# PreCompact runs dm20-checkpoint, which writes a session note from stored game
+# state and .claude/last-campaign.txt; SessionStart(compact) reads that file and
+# tells Claude to resume. Only dm20's own entries are added or removed; any other
+# settings and hooks in the file are preserved.
+
+write_dm20_hooks() {
+    local settings_file="$1"
+    local action="$2"   # "install" or "remove"
+    mkdir -p "$(dirname "$settings_file")"
+    python3 - "$settings_file" "$action" << 'PYEOF'
+import json
+import sys
+from pathlib import Path
+
+path, action = Path(sys.argv[1]), sys.argv[2]
+
+PRECOMPACT = (
+    "bash -c 'if command -v dm20-checkpoint >/dev/null 2>&1; then dm20-checkpoint 2>/dev/null; "
+    "else echo \"dm20: dm20-checkpoint not found, so no automatic checkpoint was written. "
+    "Run /dm:save to keep a session note.\"; fi; exit 0'"
+)
+RESUME = (
+    "bash -c 'f=\".claude/last-campaign.txt\"; if [ -f \"$f\" ]; then campaign=$(cat \"$f\"); "
+    "rm -f \"$f\"; echo \"🎲 Session checkpoint detected for campaign: $campaign. "
+    "Auto-resuming — invoke /dm:start $campaign now.\"; fi'"
+)
+MARKERS = ("dm20", "last-campaign.txt", "/dm:refrill")
+
+
+def is_ours(group):
+    return any(
+        any(m in str(h.get("command", "")) for m in MARKERS)
+        for h in group.get("hooks", [])
+    )
+
+
+try:
+    settings = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
+except ValueError:
+    backup = path.with_suffix(".json.invalid")
+    path.replace(backup)
+    print(f"  Existing {path.name} was not valid JSON; moved to {backup.name}")
+    settings = {}
+
+hooks = settings.setdefault("hooks", {})
+for event in ("PreCompact", "SessionStart"):
+    kept = [g for g in hooks.get(event, []) if isinstance(g, dict) and not is_ours(g)]
+    if action == "install":
+        if event == "PreCompact":
+            kept.append({"hooks": [{"type": "command", "command": PRECOMPACT, "timeout": 120}]})
+        else:
+            kept.append({"matcher": "compact", "hooks": [{"type": "command", "command": RESUME}]})
+    if kept:
+        hooks[event] = kept
+    else:
+        hooks.pop(event, None)
+if not hooks:
+    settings.pop("hooks", None)
+
+if settings or path.is_file():
+    path.write_text(json.dumps(settings, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+PYEOF
+}
+
+# ─── Plugin mode ───────────────────────────────────────────────────────────────
+# Installs the "dm" Claude Code plugin from plugin/ in a local clone. Commands,
+# persona and hooks then live in the plugin; agent templates are still copied
+# into the play directory because /dm:profile rewrites their model/effort lines.
+
+resolve_plugin_source() {
+    # Prints the directory that holds plugin/.claude-plugin/marketplace.json.
+    local script_dir
+    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || true)"
+    if [[ -n "$script_dir" && -f "${script_dir}/plugin/.claude-plugin/marketplace.json" ]]; then
+        echo "${script_dir}/plugin"
+        return 0
     fi
+    if ! command -v git &>/dev/null; then
+        return 1
+    fi
+    if [[ -d "${PLUGIN_SRC_DIR}/.git" ]]; then
+        git -C "$PLUGIN_SRC_DIR" pull --ff-only --quiet >/dev/null 2>&1 || true
+    else
+        mkdir -p "$(dirname "$PLUGIN_SRC_DIR")"
+        git clone --depth 1 --quiet "$REPO_URL" "$PLUGIN_SRC_DIR" >/dev/null 2>&1 || return 1
+    fi
+    [[ -f "${PLUGIN_SRC_DIR}/plugin/.claude-plugin/marketplace.json" ]] || return 1
+    echo "${PLUGIN_SRC_DIR}/plugin"
+}
+
+do_install_plugin() {
+    local play_dir="$1"
+    step "Installing the '${PLUGIN_NAME}' Claude Code plugin"
+
+    if ! command -v claude &>/dev/null; then
+        warn "The 'claude' CLI was not found, so the plugin cannot be installed."
+        return 1
+    fi
+
+    local plugin_src
+    if ! plugin_src="$(resolve_plugin_source)"; then
+        warn "Could not find or fetch the plugin sources (needs git)."
+        return 1
+    fi
+    info "Plugin marketplace: ${plugin_src}"
+
+    local known_marketplaces
+    known_marketplaces="$(claude plugin marketplace list 2>/dev/null || true)"
+    if grep -q "$PLUGIN_MARKETPLACE" <<<"$known_marketplaces"; then
+        claude plugin marketplace update "$PLUGIN_MARKETPLACE" >/dev/null 2>&1 || true
+    elif ! claude plugin marketplace add "$plugin_src" >/dev/null 2>&1; then
+        warn "claude plugin marketplace add ${plugin_src} failed."
+        return 1
+    fi
+
+    local plugin_ref="${PLUGIN_NAME}@${PLUGIN_MARKETPLACE}"
+    if ! (cd "$play_dir" && claude plugin install "$plugin_ref" --scope project >/dev/null 2>&1); then
+        if ! (cd "$play_dir" && claude plugin update "$plugin_ref" --scope project >/dev/null 2>&1); then
+            warn "claude plugin install ${plugin_ref} failed."
+            return 1
+        fi
+    fi
+    success "Plugin ${plugin_ref} installed for ${play_dir}"
+
+    # Agent templates: project-level, so /dm:profile can rewrite model:/effort:.
+    mkdir -p "${play_dir}/.claude/agents"
+    cp -n "${plugin_src}/${PLUGIN_NAME}/agent-templates"/*.md "${play_dir}/.claude/agents/" 2>/dev/null || true
+
+    # Retire the legacy copies so commands and hooks aren't defined twice.
+    if [[ -d "${play_dir}/.claude/commands/dm" ]]; then
+        rm -rf "${play_dir}/.claude/commands/dm"
+        info "Removed legacy .claude/commands/dm/ (now provided by the plugin)"
+    fi
+    rm -f "${play_dir}/.claude/dm-persona.md"
+    if [[ -f "${play_dir}/.claude/settings.json" ]]; then
+        write_dm20_hooks "${play_dir}/.claude/settings.json" remove
+    fi
+    return 0
 }
 
 # ─── Installation (Developer mode) ────────────────────────────────────────────
@@ -1542,103 +1672,82 @@ do_upgrade() {
     [[ -d "${play_dir}/.claude/commands" ]] && cp -r "${play_dir}/.claude/commands" "$backup_dir/" 2>/dev/null || true
     [[ -f "${play_dir}/.claude/dm-persona.md" ]] && cp "${play_dir}/.claude/dm-persona.md" "$backup_dir/" 2>/dev/null || true
     [[ -d "${play_dir}/.claude/agents" ]] && cp -r "${play_dir}/.claude/agents" "$backup_dir/" 2>/dev/null || true
+    [[ -f "${play_dir}/.claude/settings.json" ]] && cp "${play_dir}/.claude/settings.json" "$backup_dir/" 2>/dev/null || true
     success "Backup created"
 
-    # ── Step 3: Download latest .claude/ files ────────────────────────────
-    local src_dir=""
-
-    # Try local clone first
-    if [[ -f "pyproject.toml" ]] && grep -q 'name = "dm20-protocol"' pyproject.toml 2>/dev/null; then
-        src_dir="$(pwd)/.claude"
+    # A play directory that already uses the plugin stays on the plugin.
+    if [[ -f "${play_dir}/.claude/settings.json" ]] && grep -q "${PLUGIN_NAME}@${PLUGIN_MARKETPLACE}" "${play_dir}/.claude/settings.json" 2>/dev/null; then
+        PLUGIN_MODE=true
     fi
 
-    # Commands
-    mkdir -p "${play_dir}/.claude/commands/dm"
+    # ── Step 3 (plugin mode): update the plugin instead of copying files ───
+    local plugin_ok=false
+    if [[ "$PLUGIN_MODE" == true ]]; then
+        if do_install_plugin "$play_dir"; then
+            plugin_ok=true
+            # Refresh agent templates (the backup keeps the previous ones).
+            local plugin_src
+            plugin_src="$(resolve_plugin_source)" && cp "${plugin_src}/${PLUGIN_NAME}/agent-templates"/*.md "${play_dir}/.claude/agents/" 2>/dev/null || true
+        else
+            warn "Plugin upgrade failed; updating the copied config files instead."
+        fi
+    fi
 
-    if [[ -n "$src_dir" && -d "$src_dir/commands/dm" ]]; then
-        step "Updating slash commands from local clone..."
-        cp "$src_dir"/commands/dm/*.md "${play_dir}/.claude/commands/dm/" 2>/dev/null || true
-        [[ -f "$src_dir/dm-persona.md" ]] && cp "$src_dir/dm-persona.md" "${play_dir}/.claude/" 2>/dev/null || true
-        cp "$src_dir"/agents/*.md "${play_dir}/.claude/agents/" 2>/dev/null || true
-        success "Config files updated from local clone"
-    else
-        step "Downloading latest config from GitHub..."
-        local update_ok=true
+    if [[ "$plugin_ok" == false ]]; then
+        # ── Step 3: Download latest .claude/ files ────────────────────────────
+        local src_dir=""
 
-        # Slash commands
-        local dm_commands=(start action combat save profile help campaigns install-rag refrill party-auto party-kick party-mode party-next party-status party-stop party-token release-notes)
-        for cmd in "${dm_commands[@]}"; do
-            if ! curl -fsSL "${RAW_BASE}/.claude/commands/dm/${cmd}.md" -o "${play_dir}/.claude/commands/dm/${cmd}.md" 2>/dev/null; then
+        # Try local clone first
+        if [[ -f "pyproject.toml" ]] && grep -q 'name = "dm20-protocol"' pyproject.toml 2>/dev/null; then
+            src_dir="$(pwd)/.claude"
+        fi
+
+        # Commands
+        mkdir -p "${play_dir}/.claude/commands/dm"
+
+        if [[ -n "$src_dir" && -d "$src_dir/commands/dm" ]]; then
+            step "Updating slash commands from local clone..."
+            cp "$src_dir"/commands/dm/*.md "${play_dir}/.claude/commands/dm/" 2>/dev/null || true
+            [[ -f "$src_dir/dm-persona.md" ]] && cp "$src_dir/dm-persona.md" "${play_dir}/.claude/" 2>/dev/null || true
+            cp "$src_dir"/agents/*.md "${play_dir}/.claude/agents/" 2>/dev/null || true
+            success "Config files updated from local clone"
+        else
+            step "Downloading latest config from GitHub..."
+            local update_ok=true
+
+            # Slash commands
+            local dm_commands=(start action combat save profile help campaigns install-rag refrill party-auto party-kick party-mode party-next party-status party-stop party-token release-notes)
+            for cmd in "${dm_commands[@]}"; do
+                if ! curl -fsSL "${RAW_BASE}/.claude/commands/dm/${cmd}.md" -o "${play_dir}/.claude/commands/dm/${cmd}.md" 2>/dev/null; then
+                    update_ok=false
+                fi
+            done
+
+            # DM persona
+            if ! curl -fsSL "${RAW_BASE}/.claude/dm-persona.md" -o "${play_dir}/.claude/dm-persona.md" 2>/dev/null; then
                 update_ok=false
             fi
-        done
 
-        # DM persona
-        if ! curl -fsSL "${RAW_BASE}/.claude/dm-persona.md" -o "${play_dir}/.claude/dm-persona.md" 2>/dev/null; then
-            update_ok=false
-        fi
+            # Agent templates
+            mkdir -p "${play_dir}/.claude/agents"
+            for agent_file in narrator.md combat-handler.md rules-lookup.md python-pro.md; do
+                if ! curl -fsSL "${RAW_BASE}/.claude/agents/${agent_file}" -o "${play_dir}/.claude/agents/${agent_file}" 2>/dev/null; then
+                    update_ok=false
+                fi
+            done
 
-        # Agent templates
-        mkdir -p "${play_dir}/.claude/agents"
-        for agent_file in narrator.md combat-handler.md rules-lookup.md python-pro.md; do
-            if ! curl -fsSL "${RAW_BASE}/.claude/agents/${agent_file}" -o "${play_dir}/.claude/agents/${agent_file}" 2>/dev/null; then
-                update_ok=false
+            if [[ "$update_ok" == true ]]; then
+                success "All config files downloaded from GitHub"
+            else
+                warn "Some files could not be downloaded."
+                warn "Backup preserved at: ${backup_dir}"
             fi
-        done
-
-        if [[ "$update_ok" == true ]]; then
-            success "All config files downloaded from GitHub"
-        else
-            warn "Some files could not be downloaded."
-            warn "Backup preserved at: ${backup_dir}"
         fi
-    fi
 
-    # ── Step 4: Update project settings (PreCompact + SessionStart hooks) ──
-    local settings_target="${play_dir}/.claude/settings.json"
-    local settings_needs_update=true
-
-    # Check if settings.json already has correct nested hook format (matcher+hooks pattern)
-    # The correct format has "hooks": [ inside PreCompact; the old broken format has "type": directly
-    if [[ -f "$settings_target" ]] && grep -q "SessionStart" "$settings_target" 2>/dev/null && grep -q '"hooks": \[' "$settings_target" 2>/dev/null; then
-        # Extra check: if PreCompact still uses old flat format (type directly under PreCompact), force update
-        if grep -A2 '"PreCompact"' "$settings_target" 2>/dev/null | grep -q '"type"'; then
-            settings_needs_update=true
-        else
-            settings_needs_update=false
-        fi
-    fi
-
-    if [[ "$settings_needs_update" == true ]]; then
-        step "Updating project settings (PreCompact + SessionStart hooks)..."
-        cat > "$settings_target" << 'SETTINGSEOF'
-{
-  "hooks": {
-    "PreCompact": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "echo '⚠️ Context compaction triggered. Run /dm:refrill to save session before context is lost.'"
-          }
-        ]
-      }
-    ],
-    "SessionStart": [
-      {
-        "matcher": "compact",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash -c 'f=\".claude/last-campaign.txt\"; if [ -f \"$f\" ]; then campaign=$(cat \"$f\"); rm -f \"$f\"; echo \"🎲 Session checkpoint detected for campaign: $campaign. Auto-resuming — invoke /dm:start $campaign now.\"; fi'"
-          }
-        ]
-      }
-    ]
-  }
-}
-SETTINGSEOF
-        success "Project settings updated"
+        # ── Step 4: Update project settings (PreCompact + SessionStart hooks) ──
+        step "Updating project settings (PreCompact checkpoint + SessionStart resume hooks)..."
+        write_dm20_hooks "${play_dir}/.claude/settings.json" install
+        success "Project settings updated (other settings preserved)"
     fi
 
     # ── Summary ───────────────────────────────────────────────────────────
@@ -1772,6 +1881,17 @@ do_install_voice() {
 # ─── Main ──────────────────────────────────────────────────────────────────────
 
 main() {
+    # --plugin may appear anywhere; strip it before positional parsing.
+    local args=()
+    for arg in "$@"; do
+        if [[ "$arg" == "--plugin" ]]; then
+            PLUGIN_MODE=true
+        else
+            args+=("$arg")
+        fi
+    done
+    set -- "${args[@]+"${args[@]}"}"
+
     # Parse --upgrade flag before anything else
     if [[ "${1:-}" == "--upgrade" ]]; then
         UPGRADE_MODE=true
@@ -1795,6 +1915,11 @@ main() {
     detect_mode
     check_prerequisites
     gather_options
+
+    if [[ "$PLUGIN_MODE" == true && "$INSTALL_MODE" == "developer" ]]; then
+        warn "--plugin applies to user-mode play directories; a developer clone already loads .claude/ directly."
+        PLUGIN_MODE=false
+    fi
 
     if [[ "$INSTALL_MODE" == "user" ]]; then
         do_tool_install

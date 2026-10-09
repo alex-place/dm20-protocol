@@ -20,9 +20,9 @@ Question 1:
   Header: "Model"
   Question: "Model profile? (current: {model_profile})"
   Options:
-    - "Quality — Opus high effort, best for boss fights and key story moments"
-    - "Balanced — Opus medium effort, good balance of quality and cost (Recommended)"
-    - "Economy — Opus low effort + Haiku agents, fast responses, casual play"
+    - "Quality — Opus at high effort, best for boss fights and key story moments"
+    - "Balanced — Opus at medium effort, good balance of quality and cost (Recommended)"
+    - "Economy — Opus at low effort, fast responses, casual play"
 
 Question 2:
   Header: "Narration"
@@ -56,7 +56,7 @@ Question 4:
    - map Narration → `narrative_style` (descriptive/concise/dramatic/cinematic)
    - map Dialogue → `dialogue_style` (natural/theatrical/formal/casual)
    - map Mode → `interaction_mode` (classic/narrated/immersive)
-   - **Only pass parameters that actually changed** (skip unchanged ones)
+   - pass only the settings that changed
 
 4. Show a brief summary of what changed, e.g.:
    ```
@@ -66,8 +66,7 @@ Question 4:
    — Mode: classic (unchanged)
    ```
 
-5. If model_profile changed, remind the user:
-   - "Run `/model <recommended>` to match your CC model."
+5. If `model_profile` changed, the tool has rewritten the `model:` and `effort:` lines of the agent files in `.claude/agents/`; relay the recommended main model it reports ("Run `/model <recommended>` to match your Claude Code model").
 
 ### If arguments are provided
 
@@ -78,7 +77,7 @@ Any argument can be omitted by passing `-` as a placeholder (e.g., `quality - th
 2. Call `configure_claudmaster()` with only the valid, changed parameters.
 3. Report what changed.
 
-### Tips to include after applying
+### Tips to add after applying
 
 - "You can switch any setting mid-session — changes take effect on the next action."
 - "Individual settings can still be tweaked directly via `configure_claudmaster()` (profile will show as CUSTOM)."

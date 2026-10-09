@@ -97,6 +97,11 @@ The config JSON is slightly different depending on which method you used. Both v
 - The `"type": "stdio"` field is required for Claude Code
 - Claude Code inherits your shell PATH, so `"command": "dm20-protocol"` works without an absolute path
 
+**The `/dm` layer (Claude Code only).** On top of the MCP server, Claude Code gets the `/dm:*` slash commands, the DM persona, three subagents and two session hooks. The installer adds them to the play directory's `.claude/`, or, with `--plugin`, installs them as the `dm` Claude Code plugin from `plugin/` (see [Plugin Mode](INSTALLER.md#plugin-mode--the-dm-layer-as-a-claude-code-plugin)). Other MCP clients use the [recommended system prompt](GUIDE.md#system-prompt-recommendation) instead.
+
+- **Subagents** (`.claude/agents/`): `narrator`, `combat-handler` and `rules-lookup`. Each file sets `model:` (an alias: `opus`, `sonnet` or `haiku`) and `effort:`, and `/dm:profile` rewrites both. On the default *balanced* profile, narrator and combat-handler run on Opus at `medium` effort and rules-lookup on Haiku at `low`.
+- **Hooks**: `PreCompact` runs `dm20-checkpoint` to save a session note from stored game state before the context is compacted, and `SessionStart` resumes the campaign afterwards, so long sessions don't need manual `/dm:save` → `/clear` → `/dm:start` cycles. The `dm20-checkpoint` command comes with the `dm20-protocol` package; in a clone, the hook falls back to `uv run python -m dm20_protocol.checkpoint`.
+
 ---
 
 ## Claude Desktop

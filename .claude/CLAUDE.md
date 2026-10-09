@@ -89,3 +89,7 @@ When `/pm:*` commands reference shell scripts, they are located at:
 ```
 
 **NOT** at `ccpm/scripts/pm/` (which is the default path in other projects).
+
+## Claude Code plugin
+
+`plugin/dm/` is generated from `.claude/` (commands, `dm-persona.md`, agents). After editing any of them, run `python plugin/build_plugin.py`; CI and `tests/test_plugin_package.py` fail when the plugin is out of date.
