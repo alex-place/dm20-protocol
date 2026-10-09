@@ -220,9 +220,24 @@ from .llm_client import (
     LLMAPIError,
     LLMRateLimitError,
     LLMDependencyError,
+    ApiFeatures,
+    LLMResult,
+    REFUSAL_NARRATION,
+    is_cache_hit,
 )
+from .model_ids import OPUS, SONNET, HAIKU
+from .conversation import ConversationSession, effort_for_scene
 
 __all__ = [
+    "OPUS",
+    "SONNET",
+    "HAIKU",
+    "ApiFeatures",
+    "LLMResult",
+    "REFUSAL_NARRATION",
+    "is_cache_hit",
+    "ConversationSession",
+    "effort_for_scene",
     "Agent",
     "AgentRequest",
     "AgentResponse",

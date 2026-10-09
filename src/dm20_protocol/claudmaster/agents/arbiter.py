@@ -19,6 +19,8 @@ from pydantic import BaseModel, Field
 
 from dm20_protocol.models import Campaign
 from ..base import Agent, AgentRole
+from ..llm_client import supports_extended_api
+from .arbiter_tools import ARBITER_RULING_SCHEMA, ARBITER_SYSTEM_PROMPT, ArbiterToolkit
 
 logger = logging.getLogger("dm20-protocol")
 
@@ -67,6 +69,7 @@ class StateChange(BaseModel):
 class MechanicalResolution(BaseModel):
     """Structured output from the Arbiter's mechanical resolution."""
     success: bool = Field(description="Whether the player's action succeeds")
+    dc: int | None = Field(default=None, description="Difficulty class / target AC, if any")
     dice_rolls: list[DiceRollResult] = Field(default_factory=list, description="Dice rolls made")
     state_changes: list[StateChange] = Field(default_factory=list, description="Proposed state changes")
     rules_applied: list[str] = Field(default_factory=list, description="Rules/mechanics referenced")
@@ -167,10 +170,22 @@ class ArbiterAgent(Agent):
     The Arbiter uses an LLM (Sonnet) to adjudicate D&D mechanics,
     interpret dice rolls, and propose state changes based on rules.
 
+    With a full Claude API client (``AnthropicLLMClient``) the Arbiter uses a
+    frozen system prompt, a cached party roster, strict client tools
+    (``roll_dice``, ``get_character``, ``get_monster_info``) through the SDK
+    tool runner, and returns its ruling as structured output
+    (:data:`ARBITER_RULING_SCHEMA`). Minimal clients (tests, mocks) use the
+    legacy JSON-in-prose prompt.
+
     Args:
         llm: An object implementing the LLMClient protocol.
         campaign: The active D&D campaign to reference.
-        max_tokens: Maximum tokens for LLM responses.
+        max_tokens: Maximum tokens for LLM responses (thinking included).
+        toolkit: Client tools for the structured path. Defaults to a toolkit
+            bound to *campaign* without a rulebook source.
+        use_tools: Give the model the client tools (structured path only).
+        task_budget: Optional task budget in tokens for multi-step rulings
+            (beta ``task-budgets-2026-03-13``).
     """
 
     def __init__(
@@ -178,11 +193,18 @@ class ArbiterAgent(Agent):
         llm: LLMClient,
         campaign: Campaign,
         max_tokens: int = 1024,
+        toolkit: ArbiterToolkit | None = None,
+        use_tools: bool = True,
+        task_budget: int | None = None,
     ) -> None:
         super().__init__(name="arbiter", role=AgentRole.ARBITER)
         self.llm = llm
         self.campaign = campaign
         self.max_tokens = max_tokens
+        self.toolkit = toolkit or ArbiterToolkit(campaign=campaign)
+        self.use_tools = use_tools
+        self.task_budget = task_budget
+        self._current_context: dict[str, Any] = {}
 
     async def reason(self, context: dict[str, Any]) -> str:
         """Analyze player action and game state to determine what mechanics apply.
@@ -197,6 +219,7 @@ class ArbiterAgent(Agent):
         Returns:
             A reasoning string describing the action type and mechanical context.
         """
+        self._current_context = context
         player_action = context.get("player_action", "")
         player_intent = context.get("player_intent", {})
         intent_type = player_intent.get("intent_type", "")
@@ -252,6 +275,9 @@ class ArbiterAgent(Agent):
             parts = reasoning.split("|", 1)
             action_type = parts[0].replace("action_type:", "")
 
+        if supports_extended_api(self.llm) and hasattr(self.llm, "generate_structured"):
+            return await self._act_structured(action_type, reasoning)
+
         # Build prompt
         prompt = self._build_prompt(action_type, reasoning)
 
@@ -275,6 +301,108 @@ class ArbiterAgent(Agent):
                 reasoning=f"Error during mechanical resolution: {e}",
             )
 
+    async def _act_structured(self, action_type: str, reasoning: str) -> MechanicalResolution:
+        """Structured-output ruling with strict client tools (Claude API path)."""
+        tools = self.toolkit.client_tools() if self.use_tools else None
+        error = "the model declined or returned an incomplete ruling"
+        try:
+            data = await self.llm.generate_structured(
+                self._build_turn_input(action_type, reasoning),
+                ARBITER_RULING_SCHEMA,
+                max_tokens=self.max_tokens,
+                system=ARBITER_SYSTEM_PROMPT,
+                context=self._get_party_roster(),
+                tools=tools,
+                task_budget=self.task_budget,
+            )
+        except Exception as e:
+            logger.error(f"Arbiter structured resolution failed: {e}")
+            data = None
+            error = str(e)
+
+        if data is None:
+            return MechanicalResolution(
+                success=False,
+                narrative_hooks=["The moment hangs unresolved; the scene moves on."],
+                reasoning=f"No ruling: {error}",
+            )
+        return self.ruling_to_resolution(data)
+
+    @staticmethod
+    def ruling_to_resolution(data: dict[str, Any]) -> MechanicalResolution:
+        """Convert an :data:`ARBITER_RULING_SCHEMA` object to a MechanicalResolution."""
+        dc = data.get("dc")
+        rolls = [
+            DiceRollResult(
+                description=r.get("description", ""),
+                notation=r.get("notation", ""),
+                result=int(r.get("result", 0)),
+                success=r.get("success"),
+                dc=dc,
+            )
+            for r in data.get("rolls", [])
+        ]
+        changes = []
+        for c in data.get("state_changes", []):
+            value: Any = c.get("value")
+            if isinstance(value, str):
+                try:
+                    value = int(value)
+                except ValueError:
+                    pass
+            changes.append(StateChange(
+                target=c.get("target", ""),
+                change_type=c.get("change_type", ""),
+                description=c.get("description", ""),
+                value=value,
+            ))
+        hook = data.get("narration_hook") or ""
+        rules = list(data.get("rules_applied", []))
+        return MechanicalResolution(
+            success=bool(data.get("success")),
+            dc=dc,
+            dice_rolls=rolls,
+            state_changes=changes,
+            rules_applied=rules,
+            narrative_hooks=[hook] if hook else [],
+            reasoning="Structured ruling" + (f" ({'; '.join(rules)})" if rules else ""),
+        )
+
+    def _build_turn_input(self, action_type: str, reasoning: str) -> str:
+        """Volatile per-turn input: the action, intent, live state and rules hint."""
+        ctx = self._current_context
+        intent = ctx.get("player_intent") or {}
+        intent_text = json.dumps(intent, sort_keys=True, default=str) if intent else "unknown"
+        lines = [
+            f"Player action: {ctx.get('player_action') or 'unspecified'}",
+            f"Intent: {intent_text}",
+            f"Action type: {action_type}",
+            f"Analysis: {reasoning.split('|', 1)[-1]}",
+            "",
+            "Game state:",
+            self._get_game_state_context(),
+            "",
+            "Rules reminder:",
+            self._get_rules_context(action_type),
+            "",
+            "Resolve the action. Roll with roll_dice; look up sheets and stat blocks first.",
+        ]
+        return "\n".join(lines)
+
+    def _get_party_roster(self) -> str:
+        """Slow-changing party roster (cached context block)."""
+        if not self.campaign.characters:
+            return "Party roster: none recorded."
+        lines = [f"Campaign: {self.campaign.name}", "Party roster:"]
+        for key in sorted(self.campaign.characters):
+            char = self.campaign.characters[key]
+            cls = char.character_class
+            lines.append(
+                f"- {char.name}: {char.race.name} {cls.name} {cls.level}, "
+                f"AC {char.armor_class}, max HP {char.hit_points_max}"
+            )
+        return "\n".join(lines)
+
     async def observe(self, result: Any) -> dict[str, Any]:
         """Extract key observations for the orchestrator.
 
@@ -289,6 +417,7 @@ class ArbiterAgent(Agent):
 
         observations: dict[str, Any] = {
             "success": result.success,
+            "dc": result.dc,
             "num_dice_rolls": len(result.dice_rolls),
             "num_state_changes": len(result.state_changes),
             "has_narrative_hooks": len(result.narrative_hooks) > 0,
@@ -339,9 +468,11 @@ class ArbiterAgent(Agent):
         game_state_context = self._get_game_state_context()
         rules_context = self._get_rules_context(action_type)
 
-        # Get player action from reasoning (simplified extraction)
-        player_action = "Player action"
-        player_intent = "Player intent"
+        player_action = self._current_context.get("player_action") or "Player action"
+        intent = self._current_context.get("player_intent")
+        player_intent = (
+            json.dumps(intent, sort_keys=True, default=str) if intent else "Player intent"
+        )
 
         return MECHANICAL_RESOLUTION_TEMPLATE.format(
             player_action=player_action,

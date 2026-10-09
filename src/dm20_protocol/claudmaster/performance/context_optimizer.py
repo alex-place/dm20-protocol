@@ -16,6 +16,13 @@ if TYPE_CHECKING:
     from dm20_protocol.claudmaster.base import AgentRequest
 
 
+#: Default character ceiling for assembled agent context. The old 8,000-char
+#: limit predates 1M-token models; ~2M chars (~500K tokens) leaves half of
+#: Opus 5.5's window for history, output and thinking. Long multi-turn
+#: sessions rely on server-side compaction rather than hand-rolled truncation.
+DEFAULT_MAX_CONTEXT_CHARS = 2_000_000
+
+
 @dataclass
 class ContextBuildResult:
     """Result of context building."""
@@ -43,14 +50,15 @@ class OptimizedContextBuilder:
     def __init__(
         self,
         cache: Any | None = None,  # ModuleCache if available
-        max_context_length: int = 8000,  # Characters
+        max_context_length: int = DEFAULT_MAX_CONTEXT_CHARS,  # Characters
     ):
         """
         Initialize the context builder.
 
         Args:
             cache: Optional cache instance implementing get/put interface
-            max_context_length: Maximum context length in characters (default: 8000)
+            max_context_length: Maximum context length in characters
+                (default: DEFAULT_MAX_CONTEXT_CHARS, ~500K tokens)
         """
         self.cache = cache
         self.max_context_length = max_context_length
