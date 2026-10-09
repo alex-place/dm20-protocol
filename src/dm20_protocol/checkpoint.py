@@ -17,7 +17,8 @@ Usage::
 ``.claude/`` (default: ``$CLAUDE_PROJECT_DIR``, else the working directory).
 ``--storage-dir`` is the dm20 data directory (default: ``$DM20_STORAGE_DIR``,
 else the ``DM20_STORAGE_DIR`` set for the dm20-protocol server in the play
-directory's ``.mcp.json``, else ``<campaign-dir>/data``).
+directory's ``.mcp.json``, else ``DM20_STORAGE_DIR`` in its ``.env`` (developer
+installs), else ``<campaign-dir>/data``).
 
 The command is idempotent: running it twice for the same state rewrites the
 same note. If a session note for the current session already exists (for
@@ -91,6 +92,22 @@ def _storage_dir_from_mcp_json(campaign_dir: Path) -> Path | None:
     return Path(value).expanduser() if value else None
 
 
+def _storage_dir_from_dotenv(campaign_dir: Path) -> Path | None:
+    env_file = campaign_dir / ".env"
+    if not env_file.is_file():
+        return None
+    try:
+        lines = env_file.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return None
+    for line in lines:
+        key, sep, value = line.strip().partition("=")
+        if sep and key.strip() == "DM20_STORAGE_DIR":
+            value = value.strip().strip("'\"")
+            return Path(value).expanduser() if value else None
+    return None
+
+
 def resolve_storage_dir(arg: str | None, campaign_dir: Path) -> Path:
     """Return the dm20 data directory, using the documented fallback order."""
     if arg:
@@ -98,9 +115,10 @@ def resolve_storage_dir(arg: str | None, campaign_dir: Path) -> Path:
     env = os.environ.get("DM20_STORAGE_DIR")
     if env:
         return Path(env).expanduser()
-    from_mcp = _storage_dir_from_mcp_json(campaign_dir)
-    if from_mcp is not None:
-        return from_mcp
+    for finder in (_storage_dir_from_mcp_json, _storage_dir_from_dotenv):
+        found = finder(campaign_dir)
+        if found is not None:
+            return found
     return campaign_dir / "data"
 
 

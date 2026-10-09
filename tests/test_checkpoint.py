@@ -136,6 +136,9 @@ def test_storage_dir_resolution(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
     monkeypatch.delenv("DM20_STORAGE_DIR", raising=False)
     assert checkpoint.resolve_storage_dir(None, tmp_path) == tmp_path / "data"
 
+    (tmp_path / ".env").write_text(f"OTHER=1\nDM20_STORAGE_DIR={tmp_path / 'dotenv'}\n")
+    assert checkpoint.resolve_storage_dir(None, tmp_path) == tmp_path / "dotenv"
+
     (tmp_path / ".mcp.json").write_text(json.dumps({
         "mcpServers": {"dm20-protocol": {"env": {"DM20_STORAGE_DIR": str(tmp_path / "x")}}}
     }))

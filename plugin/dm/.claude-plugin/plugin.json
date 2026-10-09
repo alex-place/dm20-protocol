@@ -1,0 +1,17 @@
+{
+  "name": "dm",
+  "version": "0.4.0",
+  "description": "AI Dungeon Master for D&D 5e on the dm20-protocol MCP server: /dm commands, DM persona, and compaction checkpoint hooks.",
+  "author": {
+    "name": "Polloinfilzato"
+  },
+  "homepage": "https://github.com/Polloinfilzato/dm20-protocol",
+  "repository": "https://github.com/Polloinfilzato/dm20-protocol",
+  "license": "MIT",
+  "keywords": [
+    "dnd",
+    "dungeon-master",
+    "ttrpg",
+    "mcp"
+  ]
+}
