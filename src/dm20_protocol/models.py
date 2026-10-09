@@ -5,7 +5,7 @@ Data models for the D&D MCP Server.
 from pathlib import Path
 from datetime import datetime
 from enum import Enum
-from typing import Any, Annotated
+from typing import Any, Annotated, Literal
 from shortuuid import random
 from pydantic import BaseModel, Field, model_validator
 from logging import Handler
@@ -291,6 +291,31 @@ class ConcentrationState(BaseModel):
     started_round: int = 0
 
 
+class ClassResource(BaseModel):
+    """A limited-use class resource pool (Action Surge, Rage, Ki, Lay on Hands...).
+
+    recharge:
+        "short": fully restored by a short or long rest.
+        "long": fully restored by a long rest only. If short_rest_regain is set,
+            a short rest restores that many uses (e.g. 2024 Second Wind).
+        "none": never restored automatically.
+    """
+    max: int = Field(ge=0)
+    current: int = Field(ge=0)
+    recharge: Literal["short", "long", "none"] = "long"
+    short_rest_regain: int | None = Field(
+        default=None, ge=1,
+        description="Uses regained on a short rest when recharge is 'long' (None = none)",
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _default_current(cls, data: Any) -> Any:
+        if isinstance(data, dict) and "current" not in data and "max" in data:
+            data = {**data, "current": data["max"]}
+        return data
+
+
 class Character(BaseModel):
     """Complete character sheet."""
     # Basic Info
@@ -364,12 +389,18 @@ class Character(BaseModel):
     spellcasting_ability: str | None = None
     spell_slots: dict[int, int] = Field(default_factory=dict)  # level: max_slots
     spell_slots_used: dict[int, int] = Field(default_factory=dict)  # level: used_slots
+    # Warlock Pact Magic slots (recharge on a short rest), kept apart from spell_slots
+    pact_slots: dict[int, int] = Field(default_factory=dict)  # slot level: max_slots
+    pact_slots_used: dict[int, int] = Field(default_factory=dict)  # slot level: used_slots
     spells_known: list[Spell] = Field(default_factory=list)
 
     # Character Features
     features_and_traits: list[str] = Field(default_factory=list)  # Legacy: plain text list
     features: list[Feature] = Field(default_factory=list)  # Structured features with source/level
     languages: list[str] = Field(default_factory=list)
+
+    # Limited-use class resources, keyed by display name (e.g. "Action Surge")
+    resources: dict[str, ClassResource] = Field(default_factory=dict)
 
     # Misc
     inspiration: bool = False
@@ -498,6 +529,38 @@ class SessionNote(BaseModel):
     notes: str = ""
 
 
+class Combatant(BaseModel):
+    """A non-character participant in combat (monster, ad-hoc NPC).
+
+    Player characters keep their HP on the Character record; combatants hold
+    HP/AC/conditions for everything else so a fight can run through tools.
+    """
+    id: str = Field(default_factory=lambda: random(length=6))
+    name: str
+    ac: int = Field(default=10, ge=0)
+    hp_current: int = Field(default=1, ge=0)
+    hp_max: int = Field(default=1, ge=0)
+    temp_hp: int = Field(default=0, ge=0)
+    conditions: list[str] = Field(default_factory=list)
+    initiative: int = 0
+    monster_ref: str | None = Field(default=None, description="Rulebook monster index used for stats")
+    is_pc: bool = False
+    notes: str = ""
+    challenge_rating: float | None = None
+    xp: int | None = None
+    abilities: dict[str, int] = Field(
+        default_factory=dict,
+        description="Ability scores by full name (e.g. {'dexterity': 14}) when known",
+    )
+    resistances: list[str] = Field(default_factory=list, description="Damage types resisted")
+    immunities: list[str] = Field(default_factory=list, description="Damage types immune to")
+    vulnerabilities: list[str] = Field(default_factory=list, description="Damage types vulnerable to")
+
+    @property
+    def is_down(self) -> bool:
+        return self.hp_current <= 0
+
+
 class GameState(BaseModel):
     """Current state of the game."""
     campaign_name: str
@@ -510,6 +573,10 @@ class GameState(BaseModel):
     initiative_order: list[dict[str, Any]] = Field(default_factory=list)
     in_combat: bool = False
     current_turn: str | None = None
+    combatants: list[Combatant] = Field(
+        default_factory=list,
+        description="Non-character combatants (monsters) in the current fight",
+    )
     notes: str = ""
     updated_at: datetime = Field(default_factory=datetime.now)
 
@@ -590,7 +657,9 @@ __all__ = [
     "Modifier",
     "ActiveEffect",
     "ConcentrationState",
+    "ClassResource",
     "Character",
+    "Combatant",
     "NPC",
     "Location",
     "Quest",

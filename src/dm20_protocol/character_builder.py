@@ -107,8 +107,10 @@ class CharacterBuilderError(Exception):
 class CharacterBuilder:
     """Build a fully populated Character from rulebook definitions."""
 
-    def __init__(self, rulebook_manager: RulebookManager) -> None:
+    def __init__(self, rulebook_manager: RulebookManager, rules_version: str = "2024") -> None:
         self.rm = rulebook_manager
+        self.rules_version = rules_version
+        self.warnings: list[str] = []
 
     # ------------------------------------------------------------------
     # Public API
@@ -163,6 +165,7 @@ class CharacterBuilder:
             CharacterBuilderError: If rulebook data is missing or input is invalid.
         """
         # 1. Look up definitions
+        self.warnings = []
         class_def = self._get_class(class_name)
         race_def = self._get_race(race_name)
         bg_def = self._get_background(background) if background else None
@@ -213,6 +216,17 @@ class CharacterBuilder:
         # 8. Race traits for Race model
         race_traits = [t.name for t in race_def.traits]
 
+        # 8b. Subclass: validate against known options (free text if none known)
+        if subclass:
+            from .level_up_engine import LevelUpError, resolve_subclass
+
+            try:
+                subclass, _index, warning = resolve_subclass(self.rm, class_def, subclass)
+            except LevelUpError as e:
+                raise CharacterBuilderError(str(e)) from e
+            if warning:
+                self.warnings.append(warning)
+
         # 9. Build Character
         character = Character(
             name=name,
@@ -251,7 +265,20 @@ class CharacterBuilder:
             experience_points=0,
         )
 
+        self._finalize_progression(character, {class_def.name.strip().lower(): class_def})
+        if subclass and level >= class_def.subclass_level:
+            from .level_up_engine import add_subclass_features
+
+            add_subclass_features(self.rm, character, class_def, subclass, 1, level)
+
         return character
+
+    def _finalize_progression(self, character: Character, class_defs: dict) -> None:
+        """Compute spell/pact slots across all classes and seed class resources."""
+        from .level_up_engine import apply_default_resources, recompute_character_slots
+
+        recompute_character_slots(character, self.rules_version, class_defs)
+        apply_default_resources(character, self.rules_version)
 
     def add_classes(
         self,
@@ -321,6 +348,15 @@ class CharacterBuilder:
 
         # Recalculate proficiency bonus based on new total level
         character.proficiency_bonus = 2 + (character.total_level - 1) // 4
+
+        # Spell slots (multiclass caster level, pact magic) and class resources
+        class_defs = {}
+        for cls in character.classes:
+            try:
+                class_defs[cls.name.strip().lower()] = self._get_class(cls.name)
+            except CharacterBuilderError:
+                continue
+        self._finalize_progression(character, class_defs)
 
     # ------------------------------------------------------------------
     # Ability Score Methods
@@ -633,11 +669,17 @@ class CharacterBuilder:
         """Get spell slot maximums for a given class and level.
 
         Converts SpellcastingInfo.spell_slots[level] (list) to dict[int, int].
+        Falls back to the standard 5e table for the class's caster type when
+        the rulebook has no slot table (most sources leave it empty).
         """
-        if not class_def.spellcasting or not class_def.spellcasting.spell_slots:
-            return {}
+        from .rules_math import caster_type_for, slots_for_caster
 
-        slots_by_level = class_def.spellcasting.spell_slots.get(level)
+        table = class_def.spellcasting.spell_slots if class_def.spellcasting else None
+        if not table:
+            ctype = caster_type_for(class_def.name, None, class_def)
+            return slots_for_caster(ctype, level, self.rules_version, class_def.name)
+
+        slots_by_level = table.get(level)
         if not slots_by_level:
             return {}
 
@@ -703,7 +745,7 @@ class CharacterBuilder:
                 ))
 
             # Pick level 1+ spells up to spells_known_count
-            slot_count = len(class_def.spellcasting.spell_slots.get(level, []))
+            slot_count = len(self._get_spell_slots(class_def, level))
             max_spell_level = max(slot_count, 1)
             spell_pool = [
                 s for s in available_spells

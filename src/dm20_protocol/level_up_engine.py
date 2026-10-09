@@ -12,9 +12,10 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from .models import AbilityScore, Character, Feature
+from .models import AbilityScore, Character, ClassResource, Feature
 from .rulebooks.manager import RulebookManager
-from .rulebooks.models import ClassDefinition
+from .rulebooks.models import ClassDefinition, SubclassDefinition
+from .rules_math import compute_spell_slots, default_resources
 
 
 # Standard ASI levels (most classes)
@@ -62,8 +63,9 @@ class LevelUpResult(BaseModel):
 class LevelUpEngine:
     """Handle character level progression using rulebook data."""
 
-    def __init__(self, rulebook_manager: RulebookManager) -> None:
+    def __init__(self, rulebook_manager: RulebookManager, rules_version: str = "2024") -> None:
         self.rm = rulebook_manager
+        self.rules_version = rules_version
 
     def level_up(
         self,
@@ -91,8 +93,35 @@ class LevelUpEngine:
             LevelUpResult with summary of all changes.
 
         Raises:
-            LevelUpError: If level-up cannot proceed.
+            LevelUpError: If level-up cannot proceed. The character is left
+                completely unchanged in that case (all work happens on a deep
+                copy that is committed only on success).
         """
+        work = character.model_copy(deep=True)
+        result = self._level_up(
+            work,
+            class_name=class_name,
+            hp_method=hp_method,
+            asi_choices=asi_choices,
+            subclass=subclass,
+            new_spells=new_spells,
+        )
+        # Commit: copy every field of the successfully levelled copy back.
+        for field_name in type(character).model_fields:
+            setattr(character, field_name, getattr(work, field_name))
+        return result
+
+    def _level_up(
+        self,
+        character: Character,
+        *,
+        class_name: str | None,
+        hp_method: str,
+        asi_choices: dict[str, int] | None,
+        subclass: str | None,
+        new_spells: list[str] | None,
+    ) -> LevelUpResult:
+        """Level-up implementation. Mutates ``character`` (a working copy)."""
         # Check total level cap before proceeding
         total_before = character.total_level
         if total_before >= 20:
@@ -113,6 +142,18 @@ class LevelUpEngine:
 
         # Look up class definition
         class_def = self._get_class_def(target_class.name)
+
+        # Validate inputs before anything else changes (fail fast).
+        if hp_method not in ("average", "roll"):
+            raise LevelUpError(
+                f"Unknown hp_method: '{hp_method}'. Use 'average' or 'roll'."
+            )
+        resolved_subclass: tuple[str, str | None, str | None] | None = None
+        subclass_level = class_def.subclass_level
+        if subclass and new_level >= subclass_level:
+            resolved_subclass = resolve_subclass(self.rm, class_def, subclass)
+        if asi_choices and self._is_asi_level(new_level, class_def.name):
+            self._validate_asi(asi_choices)
 
         old_prof_bonus = character.proficiency_bonus
         changes: list[str] = []
@@ -145,16 +186,34 @@ class LevelUpEngine:
 
         # 5. Handle subclass at the appropriate level
         subclass_set = None
-        if new_level == class_def.subclass_level:
-            if subclass:
-                subclass_set = self._set_subclass(target_class, class_def, subclass)
-                changes.append(f"Subclass: {subclass_set}")
-            else:
-                changes.append(
-                    f"NOTE: Level {new_level} is the subclass selection level "
-                    f"for {class_def.name}. Available: {', '.join(class_def.subclasses) or 'check rulebook'}. "
-                    f"Use update_character to set subclass later."
-                )
+        if resolved_subclass is not None:
+            display, _index, warning = resolved_subclass
+            target_class.subclass = display
+            subclass_set = display
+            changes.append(f"Subclass: {display}")
+            if warning:
+                changes.append(f"WARNING: {warning}")
+        elif subclass:
+            changes.append(
+                f"NOTE: subclass '{subclass}' ignored: {class_def.name} chooses "
+                f"a subclass at level {subclass_level}."
+            )
+        elif new_level == subclass_level and not target_class.subclass:
+            options = subclass_options(self.rm, class_def)
+            changes.append(
+                f"NOTE: Level {new_level} is the subclass selection level "
+                f"for {class_def.name}. Available: {', '.join(options) or 'any (free text)'}. "
+                f"Use update_character with subclass=... to set it later."
+            )
+
+        # 5b. Subclass features gained at this level
+        if target_class.subclass:
+            sub_feats = add_subclass_features(
+                self.rm, character, class_def, target_class.subclass, new_level, new_level
+            )
+            if sub_feats:
+                features_added.extend(sub_feats)
+                changes.append(f"Subclass features: {', '.join(sub_feats)}")
 
         # 6. Handle ASI at appropriate levels
         asi_applied = None
@@ -172,13 +231,24 @@ class LevelUpEngine:
                     "or use update_character to adjust ability scores."
                 )
 
-        # 7. Update spell slots for casters
-        spell_slots_changed = self._update_spell_slots(character, class_def, new_level)
+        # 7. Update spell slots for casters (all classes, incl. multiclass + pact)
+        spell_slots_changed = self._recompute_spell_slots(character)
         if spell_slots_changed:
-            slots_str = ", ".join(
-                f"L{k}: {v}" for k, v in sorted(character.spell_slots.items())
-            )
-            changes.append(f"Spell slots: {slots_str}")
+            if character.spell_slots:
+                slots_str = ", ".join(
+                    f"L{k}: {v}" for k, v in sorted(character.spell_slots.items())
+                )
+                changes.append(f"Spell slots: {slots_str}")
+            if character.pact_slots:
+                pact_str = ", ".join(
+                    f"{v} x L{k}" for k, v in sorted(character.pact_slots.items())
+                )
+                changes.append(f"Pact slots (short rest): {pact_str}")
+
+        # 7b. Class resources (Action Surge, Rage, Channel Divinity, ...)
+        res_changes = apply_default_resources(character, self.rules_version)
+        if res_changes:
+            changes.append(f"Resources: {', '.join(res_changes)}")
 
         # 8. Handle new spells (informational)
         if new_spells:
@@ -273,26 +343,13 @@ class LevelUpEngine:
     # Subclass
     # ------------------------------------------------------------------
 
-    @staticmethod
     def _set_subclass(
-        target_class: "CharacterClass", class_def: ClassDefinition, subclass: str
+        self, target_class: "CharacterClass", class_def: ClassDefinition, subclass: str
     ) -> str:
-        """Set the target class's subclass, validating against available options."""
-        from .models import CharacterClass as _CC  # noqa: F811 - for type hint only
-
-        # Normalize for comparison
-        subclass_lower = subclass.lower().replace(" ", "-").replace("_", "-")
-
-        if class_def.subclasses:
-            valid = [s.lower() for s in class_def.subclasses]
-            if subclass_lower not in valid:
-                raise LevelUpError(
-                    f"Invalid subclass '{subclass}' for {class_def.name}. "
-                    f"Available: {', '.join(class_def.subclasses)}"
-                )
-
-        target_class.subclass = subclass
-        return subclass
+        """Validate and set the target class's subclass. Returns the stored name."""
+        display, _index, _warning = resolve_subclass(self.rm, class_def, subclass)
+        target_class.subclass = display
+        return display
 
     # ------------------------------------------------------------------
     # ASI
@@ -310,6 +367,30 @@ class LevelUpEngine:
             asi_levels |= ROGUE_EXTRA_ASI_LEVEL
 
         return level in asi_levels
+
+    @staticmethod
+    def _validate_asi(choices: dict[str, int]) -> dict[str, int]:
+        """Validate ASI choices without applying them. Returns normalized choices."""
+        normalized: dict[str, int] = {}
+        for ability, bonus in choices.items():
+            name = ABILITY_NAMES.get(ability.upper(), ability.lower())
+            if name not in ALL_ABILITIES:
+                raise LevelUpError(
+                    f"Unknown ability: '{ability}'. "
+                    f"Valid: {', '.join(sorted(ALL_ABILITIES))}"
+                )
+            if bonus not in (1, 2):
+                raise LevelUpError(
+                    f"Each ASI bonus must be 1 or 2 (got {ability}={bonus})"
+                )
+            normalized[name] = bonus
+        total = sum(normalized.values())
+        if total != 2:
+            raise LevelUpError(
+                f"ASI total must be exactly 2 (got {total}). "
+                'Use {"ability": 2} or {"ability1": 1, "ability2": 1}.'
+            )
+        return normalized
 
     @staticmethod
     def _apply_asi(
@@ -362,6 +443,16 @@ class LevelUpEngine:
     # ------------------------------------------------------------------
     # Spell Slots
     # ------------------------------------------------------------------
+
+    def _recompute_spell_slots(self, character: Character) -> bool:
+        """Recompute spell_slots and pact_slots from all classes. Returns True if changed."""
+        class_defs: dict[str, Any] = {}
+        for cls in character.classes:
+            try:
+                class_defs[cls.name.strip().lower()] = self._get_class_def(cls.name)
+            except LevelUpError:
+                continue
+        return recompute_character_slots(character, self.rules_version, class_defs)
 
     @staticmethod
     def _update_spell_slots(
@@ -436,3 +527,231 @@ class LevelUpEngine:
                 "Make sure a rulebook is loaded: load_rulebook source=\"srd\""
             )
         return class_def
+
+
+# ----------------------------------------------------------------------
+# Module-level helpers (shared with main.py tools and the character builder)
+# ----------------------------------------------------------------------
+
+
+def _norm_key(value: str) -> str:
+    return value.strip().lower().replace("_", "-").replace(" ", "-").replace("'", "")
+
+
+def _subclass_defs_for(rm: Any, class_def: Any) -> list[tuple[str, str]]:
+    """Return (index, display_name) for every known subclass of ``class_def``.
+
+    Combines ``class_def.subclasses`` with subclasses registered by any loaded
+    source (e.g. custom packs) whose parent_class matches.
+    """
+    out: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    parent = _norm_key(getattr(class_def, "name", "") or "")
+    parent_index = _norm_key(getattr(class_def, "index", "") or "") if isinstance(
+        getattr(class_def, "index", None), str) else parent
+
+    for index in list(getattr(class_def, "subclasses", None) or []):
+        if not isinstance(index, str):
+            continue
+        display = index.replace("-", " ").title()
+        sub = None
+        if rm is not None:
+            try:
+                sub = rm.get_subclass(index)
+            except Exception:
+                sub = None
+        if isinstance(sub, SubclassDefinition):
+            display = sub.name
+        key = _norm_key(index)
+        if key not in seen:
+            seen.add(key)
+            out.append((index, display))
+
+    if rm is not None:
+        try:
+            results = list(rm.search("", categories=["subclass"], limit=1000) or [])
+        except Exception:
+            results = []
+        for r in results:
+            index = getattr(r, "index", None)
+            if not isinstance(index, str) or _norm_key(index) in seen:
+                continue
+            try:
+                sub = rm.get_subclass(index)
+            except Exception:
+                sub = None
+            if not isinstance(sub, SubclassDefinition):
+                continue
+            if _norm_key(sub.parent_class) not in (parent, parent_index):
+                continue
+            seen.add(_norm_key(index))
+            out.append((index, sub.name))
+    return out
+
+
+def subclass_options(rm: Any, class_def: Any) -> list[str]:
+    """Display names of valid subclasses for ``class_def`` (may be empty)."""
+    return [display for _index, display in _subclass_defs_for(rm, class_def)]
+
+
+def resolve_subclass(
+    rm: Any, class_def: Any, subclass: str
+) -> tuple[str, str | None, str | None]:
+    """Validate a subclass choice.
+
+    Returns ``(name_to_store, rulebook_index_or_None, warning_or_None)``.
+    Matching ignores case, spaces, hyphens and underscores, and accepts a
+    unique partial match ("Evocation" -> "School of Evocation"). If the class
+    has no known subclasses the name is accepted as free text with a warning.
+
+    Raises:
+        LevelUpError: if subclasses are known and none matches; the message
+            lists the valid options.
+    """
+    name = subclass.strip()
+    if not name:
+        raise LevelUpError("Subclass name is empty.")
+    options = _subclass_defs_for(rm, class_def)
+    class_name = getattr(class_def, "name", "this class")
+    if not options:
+        return name, None, (
+            f"No subclass list is loaded for {class_name}; stored '{name}' as free text "
+            "(no subclass features were added automatically)."
+        )
+
+    key = _norm_key(name)
+    for index, display in options:
+        if key in (_norm_key(index), _norm_key(display)):
+            # Keep the caller's spelling when it matches exactly (case-insensitive).
+            return name, index, None
+
+    partial = [
+        (index, display) for index, display in options
+        if key in _norm_key(index) or key in _norm_key(display)
+    ]
+    if len(partial) == 1:
+        index, display = partial[0]
+        return display, index, None
+
+    raise LevelUpError(
+        f"Invalid subclass '{subclass}' for {class_name}. "
+        f"Available: {', '.join(display for _i, display in options)}"
+    )
+
+
+def add_subclass_features(
+    rm: Any,
+    character: Character,
+    class_def: Any,
+    subclass: str,
+    from_level: int,
+    to_level: int,
+) -> list[str]:
+    """Attach subclass features for class levels ``from_level..to_level``.
+
+    Uses the rulebook SubclassDefinition when one can be found; features the
+    character already has (same name and source) are skipped. Returns the
+    names of features added.
+    """
+    if rm is None:
+        return []
+    key = _norm_key(subclass)
+    sub_def = None
+    for index, display in _subclass_defs_for(rm, class_def):
+        if key in (_norm_key(index), _norm_key(display)):
+            try:
+                candidate = rm.get_subclass(index)
+            except Exception:
+                candidate = None
+            if isinstance(candidate, SubclassDefinition):
+                sub_def = candidate
+                break
+    if sub_def is None:
+        return []
+
+    existing = {(f.name, f.source) for f in character.features}
+    added: list[str] = []
+    for lvl in range(max(1, from_level), to_level + 1):
+        info = sub_def.subclass_levels.get(lvl)
+        if not info:
+            continue
+        for feat_name in info.features:
+            source = f"{sub_def.name} {lvl}"
+            if (feat_name, source) in existing:
+                continue
+            character.features.append(Feature(
+                name=feat_name,
+                source=source,
+                description=info.feature_details.get(feat_name, ""),
+                level_gained=lvl,
+            ))
+            if feat_name not in character.features_and_traits:
+                character.features_and_traits.append(feat_name)
+            added.append(feat_name)
+    return added
+
+
+def _is_caster(character: Character, class_defs: dict[str, Any] | None = None) -> bool:
+    from .rules_math import caster_type_for
+
+    class_defs = class_defs or {}
+    return any(
+        caster_type_for(c.name, c.subclass, class_defs.get(c.name.strip().lower())) is not None
+        for c in character.classes
+    )
+
+
+def recompute_character_slots(
+    character: Character,
+    rules_version: str = "2024",
+    class_defs: dict[str, Any] | None = None,
+) -> bool:
+    """Set ``spell_slots``/``pact_slots`` from the character's classes.
+
+    Non-caster characters are left untouched (manually set slots survive).
+    Used-slot counters are clamped to the new maximums. Returns True if the
+    maximums changed.
+    """
+    if not _is_caster(character, class_defs):
+        return False
+    slots, pact = compute_spell_slots(character.classes, rules_version, class_defs)
+    changed = slots != character.spell_slots or pact != character.pact_slots
+    character.spell_slots = slots
+    character.pact_slots = pact
+    character.spell_slots_used = {
+        lvl: min(used, slots[lvl]) for lvl, used in character.spell_slots_used.items()
+        if lvl in slots and used > 0
+    }
+    character.pact_slots_used = {
+        lvl: min(used, pact[lvl]) for lvl, used in character.pact_slots_used.items()
+        if lvl in pact and used > 0
+    }
+    return changed
+
+
+def apply_default_resources(character: Character, rules_version: str = "2024") -> list[str]:
+    """Seed or grow default class resources for the character's current levels.
+
+    New resources start full. Existing ones get the new maximum; if the
+    maximum grew, current grows by the same amount. Resources that are not in
+    the defaults (custom ones) are left alone. Returns change descriptions.
+    """
+    changes: list[str] = []
+    defaults = default_resources(character.classes, character.abilities, rules_version)
+    for name, spec in defaults.items():
+        existing = character.resources.get(name)
+        if existing is None:
+            character.resources[name] = ClassResource(
+                max=spec["max"], current=spec["max"], recharge=spec["recharge"],
+                short_rest_regain=spec["short_rest_regain"],
+            )
+            changes.append(f"{name} {spec['max']}/{spec['max']}")
+            continue
+        if existing.max != spec["max"] or existing.recharge != spec["recharge"]:
+            delta = spec["max"] - existing.max
+            existing.current = max(0, min(spec["max"], existing.current + max(delta, 0)))
+            existing.max = spec["max"]
+            existing.recharge = spec["recharge"]
+            existing.short_rest_regain = spec["short_rest_regain"]
+            changes.append(f"{name} {existing.current}/{existing.max}")
+    return changes

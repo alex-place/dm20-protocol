@@ -568,6 +568,9 @@ class DnDStorage:
         # Load discovery tracker (split campaigns only)
         self._load_discovery_tracker()
 
+        # Fill spell slots / class resources missing from older character data
+        self._migrate_character_progression()
+
         logger.info(f"✅ Successfully loaded campaign '{name}' using {storage_format} format (rules: {self._rules_version}).")
         return self._current_campaign
 
@@ -629,6 +632,50 @@ class DnDStorage:
             logger.info(f"🧹 Cleared active campaign state (was: '{name}')")
 
         return name
+
+    def _migrate_character_progression(self) -> int:
+        """Fill empty spell slots and class resources on legacy characters.
+
+        Older characters (and every builder-made caster before the slot tables
+        existed) have ``spell_slots == {}``. For casters with no regular or
+        pact slots, the standard tables are applied; characters with no
+        resources get the default class resources. Changes stay in memory and
+        are written by the next save (the dirty hash differs). Never raises.
+
+        Returns:
+            Number of characters changed.
+        """
+        if not self._current_campaign:
+            return 0
+        try:
+            from .level_up_engine import apply_default_resources, recompute_character_slots
+        except Exception as e:  # pragma: no cover - import safety
+            logger.warning(f"Character migration skipped: {e}")
+            return 0
+
+        changed = 0
+        rm = self._rulebook_manager
+        for character in self._current_campaign.characters.values():
+            try:
+                touched = False
+                if not character.spell_slots and not character.pact_slots:
+                    class_defs = {}
+                    if rm is not None and rm.sources:
+                        for cls in character.classes:
+                            cdef = rm.get_class(cls.name.strip().lower().replace(" ", "-"))
+                            if cdef is not None:
+                                class_defs[cls.name.strip().lower()] = cdef
+                    if recompute_character_slots(character, self._rules_version, class_defs):
+                        touched = True
+                if not character.resources:
+                    if apply_default_resources(character, self._rules_version):
+                        touched = True
+                if touched:
+                    changed += 1
+                    logger.info(f"🔧 Migrated spell slots/resources for '{character.name}'")
+            except Exception as e:
+                logger.warning(f"Character migration failed for '{character.name}': {e}")
+        return changed
 
     def _save_rules_version(self, campaign_dir: Path, rules_version: str) -> None:
         """Save rules_version to the campaign.json metadata file.
@@ -1026,6 +1073,10 @@ class DnDStorage:
             return self._current_campaign.characters.get(char_name)
 
         return None
+
+    def find_character(self, name_or_id: str) -> Character | None:
+        """Like get_character, but without logging an error when not found."""
+        return self._find_character(name_or_id)
 
     def get_character(self, name_or_id: str) -> Character | None:
         """Get a character by name or ID."""
