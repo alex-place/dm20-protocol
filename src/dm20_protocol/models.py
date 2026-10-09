@@ -552,6 +552,9 @@ class Combatant(BaseModel):
         default_factory=dict,
         description="Ability scores by full name (e.g. {'dexterity': 14}) when known",
     )
+    resistances: list[str] = Field(default_factory=list, description="Damage types resisted")
+    immunities: list[str] = Field(default_factory=list, description="Damage types immune to")
+    vulnerabilities: list[str] = Field(default_factory=list, description="Damage types vulnerable to")
 
     @property
     def is_down(self) -> bool:

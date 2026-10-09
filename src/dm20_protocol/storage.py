@@ -1074,6 +1074,10 @@ class DnDStorage:
 
         return None
 
+    def find_character(self, name_or_id: str) -> Character | None:
+        """Like get_character, but without logging an error when not found."""
+        return self._find_character(name_or_id)
+
     def get_character(self, name_or_id: str) -> Character | None:
         """Get a character by name or ID."""
         char = self._find_character(name_or_id)
