@@ -395,6 +395,8 @@ class RulebookManager:
                 total.feats += counts.feats
                 total.backgrounds += counts.backgrounds
                 total.items += counts.items
+                total.optional_features += getattr(counts, "optional_features", 0)
+                total.rules += getattr(counts, "rules", 0)
             return total
 
     # =========================================================================

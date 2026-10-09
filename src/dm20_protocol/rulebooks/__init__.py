@@ -34,6 +34,8 @@ from .models import (
     FeatDefinition,
     BackgroundDefinition,
     ItemDefinition,
+    OptionalFeatureDefinition,
+    RuleDefinition,
 )
 from .manager import RulebookManager, RulebookManagerError
 from .validators import (
@@ -76,4 +78,6 @@ __all__ = [
     "FeatDefinition",
     "BackgroundDefinition",
     "ItemDefinition",
+    "OptionalFeatureDefinition",
+    "RuleDefinition",
 ]

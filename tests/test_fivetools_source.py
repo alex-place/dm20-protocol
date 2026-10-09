@@ -7,6 +7,8 @@ Model mapping tests will be added in Task #84.
 
 import asyncio
 import json
+from datetime import datetime
+import httpx
 import pytest
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
@@ -17,6 +19,7 @@ from dm20_protocol.rulebooks.sources.fivetools import (
     GITHUB_RAW_BASE,
     INDEXED_CATEGORIES,
     SINGLE_FILE_CATEGORIES,
+    CACHE_SCHEMA_VERSION,
 )
 from dm20_protocol.rulebooks.models import (
     RulebookSource,
@@ -28,7 +31,7 @@ from dm20_protocol.rulebooks.models import (
 
 def run_async(coro):
     """Helper to run async code in sync tests."""
-    return asyncio.get_event_loop().run_until_complete(coro)
+    return asyncio.run(coro)
 
 
 # =============================================================================
@@ -974,7 +977,7 @@ class TestFullLoad:
         # Pre-populate cache
         source.cache_dir.mkdir(parents=True)
         (source.cache_dir / "metadata.json").write_text(
-            json.dumps({"downloaded_at": "2026-01-01T00:00:00"})
+            json.dumps({"downloaded_at": datetime.now().isoformat(), "schema_version": CACHE_SCHEMA_VERSION})
         )
         merged_dir = source.cache_dir / "merged"
         merged_dir.mkdir()
@@ -1502,7 +1505,7 @@ class TestMarkupConversion:
         assert FiveToolsSource._convert_5etools_markup("{@action Disengage}") == "Disengage"
 
     def test_recharge_tag(self):
-        assert FiveToolsSource._convert_5etools_markup("{@recharge 5}") == "5"
+        assert FiveToolsSource._convert_5etools_markup("{@recharge 5}") == "(Recharge 5–6)"
 
     def test_multiple_tags_in_text(self):
         text = "{@atk mw} {@hit 4} to hit, reach 5 ft., one target. {@h}5 ({@damage 1d6 + 2}) slashing damage."

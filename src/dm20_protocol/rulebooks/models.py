@@ -66,6 +66,14 @@ class RulebookEntry(BaseModel):
     name: str = Field(description="Display name")
     source: str = Field(default="srd", description="Source identifier (srd, open5e, or custom rulebook name)")
     url: str | None = Field(default=None, description="API URL if from external source")
+    source_book: str | None = Field(
+        default=None,
+        description="Original publication abbreviation (e.g. 'PHB', 'XPHB', 'EGW') when known",
+    )
+    edition: Literal["2014", "2024"] | None = Field(
+        default=None,
+        description="Rules edition of this entry when known ('2014' classic or '2024' revised)",
+    )
 
 
 # =============================================================================
@@ -90,8 +98,25 @@ class SpellcastingInfo(BaseModel):
     )
     spell_slots: dict[int, list[int]] | None = Field(
         default=None,
-        description="Spell slots per level. Key = character level, Value = [1st, 2nd, 3rd, ...]"
+        description=(
+            "Spell slots per level. Key = class level, Value = [1st, 2nd, 3rd, ...] "
+            "(index 0 = 1st-level slots). Pact Magic is expressed the same way, e.g. "
+            "a 5th-level warlock is [0, 0, 2]. Trailing zeros are trimmed."
+        ),
     )
+    prepared_spells: list[int] | None = Field(
+        default=None,
+        description="Prepared spells by level (index 0 = level 1) for prepared casters",
+    )
+    pact_magic: bool = Field(
+        default=False,
+        description="True when the slots are Pact Magic slots (all of one level, short-rest recovery)",
+    )
+
+    def slots_at(self, level: int) -> dict[int, int]:
+        """Return {slot level: count} for the given class level (empty if none)."""
+        row = (self.spell_slots or {}).get(level) or []
+        return {i + 1: n for i, n in enumerate(row) if n}
 
 
 class ClassLevelInfo(BaseModel):
@@ -126,6 +151,18 @@ class SubclassDefinition(RulebookEntry):
         default=None,
         description="Subclass spellcasting (e.g., Eldritch Knight, Arcane Trickster)"
     )
+    short_name: str | None = Field(
+        default=None,
+        description="Short name used for selection (e.g. 'Lore' for 'College of Lore')",
+    )
+
+    def features_up_to(self, level: int) -> dict[int, list[str]]:
+        """Feature names gained from this subclass at or below ``level``."""
+        return {
+            lvl: info.features
+            for lvl, info in sorted(self.subclass_levels.items())
+            if lvl <= level and info.features
+        }
 
 
 class ClassDefinition(RulebookEntry):
@@ -152,6 +189,17 @@ class ClassDefinition(RulebookEntry):
     multi_classing: dict[str, Any] = Field(
         default_factory=dict,
         description="Multiclassing requirements and proficiencies"
+    )
+    subclass_title: str | None = Field(
+        default=None,
+        description="What the class calls its subclasses (e.g. 'Martial Archetype')",
+    )
+    optional_feature_progression: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description=(
+            "Choosable option progressions, e.g. [{'name': 'Eldritch Invocations', "
+            "'feature_types': ['EI'], 'progression': {2: 2, 5: 3}}]"
+        ),
     )
 
 
@@ -319,6 +367,24 @@ class MonsterDefinition(RulebookEntry):
     # Description
     desc: str | None = Field(default=None)
 
+    # Extended stat block (optional; filled by richer sources such as 5etools)
+    saving_throws: dict[str, str] = Field(
+        default_factory=dict, description="Save bonuses, e.g. {'DEX': '+6'}"
+    )
+    skills: dict[str, str] = Field(
+        default_factory=dict, description="Skill bonuses, e.g. {'perception': '+13'}"
+    )
+    bonus_actions: list[MonsterAction] = Field(default_factory=list)
+    legendary_desc: str | None = Field(default=None, description="Legendary action header text")
+    legendary_actions_per_round: int | None = Field(default=None)
+    mythic_actions: list[MonsterAction] | None = Field(default=None)
+    spellcasting: list[MonsterAbility] = Field(
+        default_factory=list, description="Rendered spellcasting blocks"
+    )
+    regional_effects: list[str] | None = Field(default=None)
+    xp_lair: int | None = Field(default=None, description="XP when encountered in its lair")
+    environment: list[str] = Field(default_factory=list)
+
     def get_ability_modifier(self, ability: str) -> int:
         """Calculate ability modifier."""
         score = getattr(self, ability.lower(), 10)
@@ -346,6 +412,12 @@ class FeatDefinition(RulebookEntry):
     ability_score_increase: list[AbilityBonus] | None = Field(default=None)
     ability_score_choice: dict[str, Any] | None = Field(default=None)
     proficiencies: list[str] = Field(default_factory=list)
+    category: str | None = Field(
+        default=None,
+        description="2024 feat category: Origin, General, Fighting Style, Epic Boon, ...",
+    )
+    repeatable: bool = Field(default=False)
+    prerequisite_text: str | None = Field(default=None, description="Readable prerequisites")
 
 
 class BackgroundFeature(BaseModel):
@@ -367,6 +439,10 @@ class BackgroundDefinition(RulebookEntry):
     ideals: dict[str, Any] | None = Field(default=None)
     bonds: dict[str, Any] | None = Field(default=None)
     flaws: dict[str, Any] | None = Field(default=None)
+    ability_scores: list[str] = Field(
+        default_factory=list, description="2024 backgrounds: abilities that can be increased"
+    )
+    feats: list[str] = Field(default_factory=list, description="2024 backgrounds: feats granted")
 
 
 class ItemDefinition(RulebookEntry):
@@ -394,6 +470,33 @@ class ItemDefinition(RulebookEntry):
     rarity: ItemRarity | None = Field(default=None)
     requires_attunement: bool = Field(default=False)
     attunement_requirements: str | None = Field(default=None)
+    base_item: str | None = Field(
+        default=None, description="Index of the mundane item a magic variant is built on"
+    )
+    bonus: dict[str, str] | None = Field(
+        default=None, description="Numeric bonuses, e.g. {'weapon': '+1', 'ac': '+2'}"
+    )
+    charges: int | None = Field(default=None)
+
+
+class OptionalFeatureDefinition(RulebookEntry):
+    """Choosable class option: fighting style, invocation, maneuver, metamagic, ..."""
+    feature_types: list[str] = Field(
+        default_factory=list, description="Raw type codes, e.g. ['EI'], ['MV:B'], ['FS:F']"
+    )
+    feature_type_names: list[str] = Field(
+        default_factory=list, description="Readable type names, e.g. ['Eldritch Invocation']"
+    )
+    desc: list[str] = Field(default_factory=list)
+    prerequisite_text: str | None = Field(default=None)
+
+
+class RuleDefinition(RulebookEntry):
+    """A named rules element: condition, disease, status, action or variant rule."""
+    category: Literal["condition", "disease", "status", "action", "variantrule"] = Field(
+        default="condition"
+    )
+    desc: list[str] = Field(default_factory=list)
 
 
 # =============================================================================
@@ -506,6 +609,8 @@ __all__ = [
     "BackgroundFeature",
     "ItemDefinition",
     "Prerequisite",
+    "OptionalFeatureDefinition",
+    "RuleDefinition",
     # Containers
     "Rulebook",
     "RulebookManifest",
