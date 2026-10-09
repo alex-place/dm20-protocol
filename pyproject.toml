@@ -45,6 +45,7 @@ dev = [
 
 [project.scripts]
 dm20-protocol = "dm20_protocol.main:main"
+dm20-checkpoint = "dm20_protocol.checkpoint:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
