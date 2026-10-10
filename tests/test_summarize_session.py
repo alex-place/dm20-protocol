@@ -264,8 +264,8 @@ class TestSummarizeSessionTool:
         mock_storage_patch.list_locations_detailed.return_value = []
         mock_storage_patch.list_quests.return_value = []
 
-        # Create a large transcription (>200k chars)
-        large_transcription = "The party explores. " * 15000  # ~300k chars
+        # Chunking only kicks in above ~600k tokens (2.4M chars) for the 1M window
+        large_transcription = "The party explores. " * 150000  # ~3M chars
 
         result = _summarize_session_impl(
             transcription=large_transcription,

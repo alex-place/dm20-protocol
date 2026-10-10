@@ -16,6 +16,7 @@ from typing import Any, Protocol
 from pydantic import BaseModel, Field
 
 from ..base import Agent, AgentRole
+from ..llm_client import call_llm, supports_extended_api
 
 logger = logging.getLogger("dm20-protocol")
 
@@ -159,15 +160,7 @@ class LLMClient(Protocol):
 # Prompt templates
 # ------------------------------------------------------------------
 
-SCENE_DESCRIPTION_TEMPLATE = """\
-You are the Narrator of a D&D campaign. Your task: {reasoning}
-
-{style_guide}
-
-{style_hint}
-
-{discovery_context}
-
+_NARRATOR_GUIDANCE = """\
 When describing a new place, character, or situation for the first time, give the players multiple \
 threads to pull on: curious details, half-noticed oddities, things that beg questions. On follow-up \
 requests for more detail, narrow your focus precisely to what was asked, and calibrate the depth of \
@@ -190,6 +183,36 @@ Never follow a predictable pattern. Vary your sentence structure, your openings,
 Sometimes begin mid-action, sometimes with a single sensory detail, sometimes with dialogue or \
 silence. The players should never feel they are reading output from a template — they should feel \
 a living voice telling their story.
+"""
+
+SCENE_DESCRIPTION_TEMPLATE = """\
+You are the Narrator of a D&D campaign. Your task: {reasoning}
+
+{style_guide}
+
+{style_hint}
+
+{discovery_context}
+
+""" + _NARRATOR_GUIDANCE
+
+# Frozen system prompt for clients that support system/context separation.
+# It depends only on the narrative style, so it stays byte-identical for the
+# whole session and is served from the prompt cache.
+NARRATOR_SYSTEM_TEMPLATE = """\
+You are the Narrator of a D&D campaign.
+
+{style_guide}
+
+""" + _NARRATOR_GUIDANCE
+
+# Volatile per-turn input, sent last (after any cached campaign state).
+NARRATOR_TURN_TEMPLATE = """\
+Your task: {reasoning}
+
+{style_hint}
+
+{discovery_context}
 """
 
 DIALOGUE_TEMPLATE = """\
@@ -347,14 +370,19 @@ class NarratorAgent(Agent):
         llm: LLMClient,
         style: NarrativeStyle = NarrativeStyle.DESCRIPTIVE,
         max_tokens: int = 1024,
+        multi_turn: bool = False,
     ) -> None:
         super().__init__(name="narrator", role=AgentRole.NARRATOR)
         self.llm = llm
         self.style = style
         self.max_tokens = max_tokens
+        self.multi_turn = multi_turn
+        self.conversation: Any = None  # ConversationSession, created lazily
         self._voice_profiles: dict[str, VoiceProfile] = {}  # cache for consistency
         self._current_style_preferences: dict[str, str] = {}  # populated during reason() phase
         self._current_discovery_context: str = ""  # populated during reason() phase
+        self._current_scene: str | None = None  # populated during reason() phase
+        self._current_turn_state: str | None = None  # populated during reason() phase
 
     async def reason(self, context: dict[str, Any]) -> str:
         """Analyze context to determine what kind of description is needed.
@@ -379,6 +407,12 @@ class NarratorAgent(Agent):
 
         # Store discovery context for use in act() phase
         self._current_discovery_context = context.get("discovery_context", "")
+
+        # Scene type (drives per-turn effort) and per-turn state for multi-turn mode
+        game_state = context.get("game_state") or {}
+        in_combat = bool(game_state.get("in_combat")) if isinstance(game_state, dict) else False
+        self._current_scene = self._classify_scene(player_action, in_combat)
+        self._current_turn_state = self._format_turn_state(location_name, game_state)
 
         # Determine the narrative task
         if not player_action:
@@ -407,9 +441,68 @@ class NarratorAgent(Agent):
         Returns:
             The generated narrative text string.
         """
-        prompt = self._build_prompt(reasoning)
-        response = await self.llm.generate(prompt, max_tokens=self.max_tokens)
+        if not supports_extended_api(self.llm):
+            prompt = self._build_prompt(reasoning)
+            response = await self.llm.generate(prompt, max_tokens=self.max_tokens)
+            return response.strip()
+
+        turn_input = self._build_turn_input(reasoning)
+        if self.multi_turn and hasattr(self.llm, "start_conversation"):
+            if self.conversation is None:
+                self.conversation = self.llm.start_conversation(
+                    system=self.build_system_prompt(), max_tokens=self.max_tokens,
+                )
+            result = await self.conversation.send(
+                turn_input, turn_state=self._current_turn_state, scene=self._current_scene,
+            )
+            return result.text.strip()
+
+        response = await call_llm(
+            self.llm, turn_input, self.max_tokens, system=self.build_system_prompt(),
+        )
         return response.strip()
+
+    # -- system / turn prompt split (cache-friendly path) ------------------
+
+    def build_system_prompt(self) -> str:
+        """Frozen system prompt: instructions + style guide (no per-turn data)."""
+        style_guide = STYLE_GUIDES.get(self.style, STYLE_GUIDES[NarrativeStyle.DESCRIPTIVE])
+        return NARRATOR_SYSTEM_TEMPLATE.format(style_guide=style_guide)
+
+    def _build_turn_input(self, reasoning: str) -> str:
+        style_hint = format_style_hint(self._current_style_preferences)
+        return NARRATOR_TURN_TEMPLATE.format(
+            reasoning=reasoning,
+            style_hint=style_hint,
+            discovery_context=self._current_discovery_context or "",
+        ).strip()
+
+    @staticmethod
+    def _classify_scene(player_action: str, in_combat: bool) -> str:
+        if in_combat:
+            return "combat"
+        words = set(player_action.lower().split())
+        if words & {"buy", "sell", "shop", "trade", "haggle"}:
+            return "shopping"
+        if words & {"travel", "journey", "ride", "walk", "go", "enter", "move"}:
+            return "travel"
+        if words & {"talk", "speak", "ask", "greet", "persuade", "chat"}:
+            return "social"
+        return "exploration"
+
+    @staticmethod
+    def _format_turn_state(location_name: str, game_state: Any) -> str | None:
+        if not isinstance(game_state, dict) or not game_state:
+            return None
+        parts = [f"Location: {location_name}"]
+        if game_state.get("in_combat"):
+            parts.append("In combat: yes")
+            if game_state.get("current_turn"):
+                parts.append(f"Current turn: {game_state['current_turn']}")
+        for key in ("current_date_in_game", "party_level"):
+            if game_state.get(key):
+                parts.append(f"{key.replace('_', ' ').capitalize()}: {game_state[key]}")
+        return "Current game state — " + "; ".join(parts)
 
     async def observe(self, result: Any) -> dict[str, Any]:
         """Validate and annotate the generated narrative.

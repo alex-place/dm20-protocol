@@ -20,6 +20,7 @@ from unittest.mock import MagicMock, patch
 
 from dm20_protocol.claudmaster.config import ClaudmasterConfig
 from dm20_protocol.claudmaster.improvisation import ImprovisationLevel
+from dm20_protocol.claudmaster.model_ids import OPUS, SONNET
 
 
 # ============================================================================
@@ -73,9 +74,10 @@ class TestClaudmasterConfigDefaults:
     def test_default_values(self):
         config = ClaudmasterConfig()
         assert config.llm_provider == "anthropic"
-        assert config.llm_model == "claude-sonnet-4-5-20250929"
-        assert config.temperature == 0.7
-        assert config.max_tokens == 4096
+        assert config.llm_model == OPUS
+        assert config.temperature is None  # deprecated, never sent
+        assert config.effort == "medium"
+        assert config.max_tokens == 16000
         assert config.improvisation_level == ImprovisationLevel.MEDIUM
         assert config.narrative_style == "descriptive"
         assert config.dialogue_style == "natural"
@@ -165,7 +167,7 @@ class TestConfigStorage:
     def test_get_default_config_no_file(self, mock_storage):
         config = mock_storage.get_claudmaster_config()
         assert isinstance(config, ClaudmasterConfig)
-        assert config.temperature == 0.7
+        assert config.temperature is None
 
     def test_save_and_load_config(self, mock_storage, tmp_campaign_dir):
         config = ClaudmasterConfig(temperature=1.0, difficulty="hard")
@@ -217,7 +219,6 @@ class TestConfigureCludmasterTool:
         result = self._call_tool(mock_storage)
         assert "Current" in result
         assert "descriptive" in result
-        assert "0.7" in result
 
     def test_partial_update_temperature(self, mock_storage):
         result = self._call_tool(mock_storage, temperature=1.2)
@@ -264,7 +265,7 @@ class TestConfigureCludmasterTool:
         assert "Defaults" in result
 
         config = mock_storage.get_claudmaster_config()
-        assert config.temperature == 0.7
+        assert config.temperature is None
         assert config.difficulty == "normal"
 
     def test_invalid_improvisation_returns_error(self, mock_storage):
@@ -350,11 +351,11 @@ class TestConfigureWithModelProfile:
 
         config = mock_storage.get_claudmaster_config()
         assert config.model_profile == "economy"
-        assert config.llm_model == "claude-opus-4-5-20250929"
-        assert config.narrator_model == "claude-opus-4-5-20250929"
+        assert config.llm_model == SONNET
+        assert config.narrator_model == SONNET
         assert config.effort == "low"
         assert config.narrator_effort == "low"
-        assert config.arbiter_effort == "low"
+        assert config.arbiter_effort == "medium"
 
     @patch("dm20_protocol.claudmaster.profiles.update_agent_files", return_value=["narrator", "combat-handler"])
     def test_profile_shows_agent_update_status(self, mock_update, mock_storage):
@@ -391,7 +392,7 @@ class TestConfigureWithModelProfile:
         config = mock_storage.get_claudmaster_config()
         assert config.model_profile == "custom"
         # But the other profile fields should remain
-        assert config.narrator_model == "claude-opus-4-5-20250929"
+        assert config.narrator_model == OPUS
 
     @patch("dm20_protocol.claudmaster.profiles.update_agent_files", return_value=["narrator", "combat-handler"])
     def test_profile_preserves_non_model_settings(self, mock_update, mock_storage):

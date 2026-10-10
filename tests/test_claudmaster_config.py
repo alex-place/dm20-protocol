@@ -26,19 +26,19 @@ class TestClaudmasterConfigDefaults:
         assert config.llm_provider == "anthropic"
 
     def test_default_llm_model(self) -> None:
-        """Test that default model is claude-sonnet-4-5."""
+        """Test that default model is Opus 5.5 (no date suffix)."""
         config = ClaudmasterConfig()
-        assert config.llm_model == "claude-sonnet-4-5-20250929"
+        assert config.llm_model == "claude-opus-5-5"
 
     def test_default_max_tokens(self) -> None:
-        """Test that default max_tokens is 4096."""
+        """Test that default max_tokens is 16000 (room for thinking)."""
         config = ClaudmasterConfig()
-        assert config.max_tokens == 4096
+        assert config.max_tokens == 16000
 
     def test_default_temperature(self) -> None:
-        """Test that default temperature is 0.7."""
+        """Temperature is deprecated: default None, never sent to the API."""
         config = ClaudmasterConfig()
-        assert config.temperature == 0.7
+        assert config.temperature is None
 
     def test_default_improvisation_level(self) -> None:
         """Test that default improvisation level is MEDIUM."""

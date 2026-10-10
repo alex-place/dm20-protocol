@@ -37,7 +37,7 @@ def sample_session_data():
         "campaign_id": "campaign-123",
         "config": {
             "llm_provider": "anthropic",
-            "llm_model": "claude-sonnet-4-5-20250929",
+            "llm_model": "claude-sonnet-5-5",
             "temperature": 0.7,
             "max_tokens": 4096,
         },
@@ -174,7 +174,7 @@ def test_save_session_state_snapshot(serializer, sample_session_data):
     assert state["session_id"] == "test-session-abc"
     assert state["campaign_id"] == "campaign-123"
     assert state["turn_count"] == 15
-    assert state["config"]["llm_model"] == "claude-sonnet-4-5-20250929"
+    assert state["config"]["llm_model"] == "claude-sonnet-5-5"
     assert state["active_agents"]["narrator"] == "idle"
 
 
@@ -235,7 +235,7 @@ def test_load_session_roundtrip(serializer, sample_session_data):
     assert loaded["campaign_id"] == "campaign-123"
     assert loaded["turn_count"] == 15
     assert len(loaded["conversation_history"]) == 4
-    assert loaded["config"]["llm_model"] == "claude-sonnet-4-5-20250929"
+    assert loaded["config"]["llm_model"] == "claude-sonnet-5-5"
 
 
 def test_load_session_not_found(serializer):

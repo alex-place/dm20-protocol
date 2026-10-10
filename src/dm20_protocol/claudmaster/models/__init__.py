@@ -13,6 +13,10 @@ from .module import (
     LocationReference,
     ModuleStructure,
 )
+from ..model_ids import HAIKU, OPUS, SONNET
+
+# Model ID constants live in claudmaster/model_ids.py (this package name was
+# already taken); re-exported here so `claudmaster.models.OPUS` works.
 
 __all__ = [
     "ContentType",
@@ -21,4 +25,7 @@ __all__ = [
     "EncounterReference",
     "LocationReference",
     "ModuleStructure",
+    "OPUS",
+    "SONNET",
+    "HAIKU",
 ]
