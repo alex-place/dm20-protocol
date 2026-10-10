@@ -153,16 +153,13 @@ class LibraryManager:
             logger.debug("📂 pdfs/ directory does not exist, returning empty list")
             return []
 
-        files: list[Path] = []
-
-        # Find PDF files
-        files.extend(self.pdfs_dir.glob("*.pdf"))
-        files.extend(self.pdfs_dir.glob("*.PDF"))
-
-        # Find Markdown files
-        files.extend(self.pdfs_dir.glob("*.md"))
-        files.extend(self.pdfs_dir.glob("*.MD"))
-        files.extend(self.pdfs_dir.glob("*.markdown"))
+        # Match extensions case-insensitively in one pass. Globbing "*.pdf" and
+        # "*.PDF" separately returns every file twice on case-insensitive
+        # filesystems (Windows, default macOS).
+        files: list[Path] = [
+            p for p in self.pdfs_dir.iterdir()
+            if p.is_file() and p.suffix.lower() in {".pdf", ".md", ".markdown"}
+        ]
 
         # Sort by name for consistent ordering
         files.sort(key=lambda p: p.name.lower())

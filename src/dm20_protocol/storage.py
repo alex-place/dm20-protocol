@@ -30,6 +30,32 @@ from .consistency.discovery import DiscoveryTracker
 
 logger = logging.getLogger("dm20-protocol")
 
+# Private loop for running rulebook coroutines from synchronous storage code.
+# It is never closed, so sources holding loop-bound resources keep working
+# across calls (asyncio.run would close the loop after each one).
+_sync_loop: asyncio.AbstractEventLoop | None = None
+
+
+def _run_sync(coro):
+    """Run a coroutine to completion from synchronous code.
+
+    Works whether or not the calling thread already has a running event loop
+    (as it does inside the MCP server): in that case the coroutine runs on a
+    worker thread instead of re-entering the running loop.
+    """
+    global _sync_loop
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        if _sync_loop is None or _sync_loop.is_closed():
+            _sync_loop = asyncio.new_event_loop()
+        return _sync_loop.run_until_complete(coro)
+
+    import concurrent.futures
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result()
+
 logging.basicConfig(
     level=logging.DEBUG,
 )
@@ -852,16 +878,7 @@ class DnDStorage:
 
         # Load manager from manifest (async operation)
         try:
-            # Execute the async factory method
-            # Use get_event_loop() instead of asyncio.run() to avoid closing the loop
-            # which would break subsequent async operations in the same process
-            try:
-                loop = asyncio.get_running_loop()
-            except RuntimeError:
-                # No event loop running - get or create one without closing it
-                loop = asyncio.get_event_loop()
-
-            self._rulebook_manager = loop.run_until_complete(
+            self._rulebook_manager = _run_sync(
                 RulebookManager.from_manifest(campaign_dir)
             )
             logger.info(f"✅ Loaded RulebookManager for campaign '{self._current_campaign.name}'")
@@ -981,13 +998,7 @@ class DnDStorage:
                     source_id=custom_source_id,
                 )
 
-                # Load the source (async operation)
-                try:
-                    loop = asyncio.get_running_loop()
-                except RuntimeError:
-                    loop = asyncio.get_event_loop()
-
-                loop.run_until_complete(self._rulebook_manager.load_source(custom_source))
+                _run_sync(self._rulebook_manager.load_source(custom_source))
                 loaded_count += 1
                 logger.debug(f"Loaded library source: {custom_source_id}")
 
