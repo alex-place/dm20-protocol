@@ -1,0 +1,4869 @@
+{
+  "add_death_save": {
+    "annotations": null,
+    "description": "Record a death saving throw result.\n\nTracks successes and failures. At 3 successes, the character stabilizes\n(HP set to 1, death saves reset). At 3 failures, the character dies.",
+    "inputSchema": {
+      "properties": {
+        "character_name_or_id": {
+          "description": "Character name, ID, or player name",
+          "title": "Character Name Or Id",
+          "type": "string"
+        },
+        "player_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Player ID for permission check (omit for single-player DM mode)",
+          "title": "Player Id"
+        },
+        "success": {
+          "description": "True for success, False for failure",
+          "title": "Success",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "character_name_or_id",
+        "success"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "add_event": {
+    "annotations": null,
+    "description": "Add an event to the adventure log.",
+    "inputSchema": {
+      "properties": {
+        "characters_involved": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Characters involved — list or JSON array string, e.g. '[\"name1\",\"name2\"]'",
+          "title": "Characters Involved"
+        },
+        "description": {
+          "description": "Event description",
+          "title": "Description",
+          "type": "string"
+        },
+        "event_type": {
+          "description": "Type of event",
+          "enum": [
+            "combat",
+            "roleplay",
+            "exploration",
+            "quest",
+            "character",
+            "world",
+            "session",
+            "social"
+          ],
+          "title": "Event Type",
+          "type": "string"
+        },
+        "importance": {
+          "default": 3,
+          "description": "Event importance (1-5)",
+          "maximum": 5,
+          "minimum": 1,
+          "title": "Importance",
+          "type": "integer"
+        },
+        "location": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Location where event occurred",
+          "title": "Location"
+        },
+        "session_number": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Session number",
+          "title": "Session Number"
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Tags for categorizing the event — list or JSON array string, e.g. '[\"npc\",\"story\"]'",
+          "title": "Tags"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Event title (optional, auto-generated from description if omitted)",
+          "title": "Title"
+        }
+      },
+      "required": [
+        "event_type",
+        "description"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "add_item_to_character": {
+    "annotations": null,
+    "description": "Add an item to a character's inventory.",
+    "inputSchema": {
+      "properties": {
+        "character_name_or_id": {
+          "description": "Character name, ID, or player name.",
+          "title": "Character Name Or Id",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Item description",
+          "title": "Description"
+        },
+        "item_name": {
+          "description": "Item name",
+          "title": "Item Name",
+          "type": "string"
+        },
+        "item_type": {
+          "default": "misc",
+          "description": "Item type (e.g., 'weapon', 'armor', 'consumable', 'misc', 'treasure', 'tool', 'quest')",
+          "title": "Item Type",
+          "type": "string"
+        },
+        "player_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Player ID for permission check (omit for single-player DM mode)",
+          "title": "Player Id"
+        },
+        "quantity": {
+          "default": 1,
+          "description": "Quantity",
+          "minimum": 1,
+          "title": "Quantity",
+          "type": "integer"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Item value (e.g., '50 gp')",
+          "title": "Value"
+        },
+        "weight": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Item weight",
+          "title": "Weight"
+        }
+      },
+      "required": [
+        "character_name_or_id",
+        "item_name"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "add_session_note": {
+    "annotations": null,
+    "description": "Add notes for a game session.",
+    "inputSchema": {
+      "properties": {
+        "characters_present": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Characters present in session (JSON list or comma-separated)",
+          "title": "Characters Present"
+        },
+        "combat_encounters": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Combat encounter summaries (JSON list or comma-separated)",
+          "title": "Combat Encounters"
+        },
+        "events": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Key events that occurred (JSON list or comma-separated)",
+          "title": "Events"
+        },
+        "experience_gained": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Experience points gained",
+          "title": "Experience Gained"
+        },
+        "notes": {
+          "default": "",
+          "description": "Additional notes",
+          "title": "Notes",
+          "type": "string"
+        },
+        "npcs_encountered": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "NPCs encountered in session (JSON list or comma-separated)",
+          "title": "Npcs Encountered"
+        },
+        "quest_updates": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Quest name to progress mapping (JSON object)",
+          "title": "Quest Updates"
+        },
+        "session_number": {
+          "description": "Session number",
+          "minimum": 1,
+          "title": "Session Number",
+          "type": "integer"
+        },
+        "summary": {
+          "description": "Session summary",
+          "title": "Summary",
+          "type": "string"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Session title",
+          "title": "Title"
+        },
+        "treasure_found": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Treasure or items found (JSON list or comma-separated)",
+          "title": "Treasure Found"
+        }
+      },
+      "required": [
+        "session_number",
+        "summary"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "add_spell": {
+    "annotations": null,
+    "description": "Add a spell to a character's spells known list.",
+    "inputSchema": {
+      "properties": {
+        "casting_time": {
+          "default": "1 action",
+          "description": "Casting time (e.g. '1 action')",
+          "title": "Casting Time",
+          "type": "string"
+        },
+        "character_name_or_id": {
+          "description": "Character name, ID, or player name",
+          "title": "Character Name Or Id",
+          "type": "string"
+        },
+        "components": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "JSON list of components, e.g. '[\"V\",\"S\",\"M\"]'",
+          "title": "Components"
+        },
+        "duration": {
+          "default": "instantaneous",
+          "description": "Duration (e.g. 'instantaneous')",
+          "title": "Duration",
+          "type": "string"
+        },
+        "player_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Player ID for permission check (omit for single-player DM mode)",
+          "title": "Player Id"
+        },
+        "prepared": {
+          "default": false,
+          "description": "Whether the spell is prepared",
+          "title": "Prepared",
+          "type": "boolean"
+        },
+        "school": {
+          "default": "unknown",
+          "description": "School of magic (e.g. 'evocation', 'abjuration')",
+          "title": "School",
+          "type": "string"
+        },
+        "spell_description": {
+          "default": "",
+          "description": "Spell description",
+          "title": "Spell Description",
+          "type": "string"
+        },
+        "spell_level": {
+          "description": "Spell level (0 for cantrip)",
+          "maximum": 9,
+          "minimum": 0,
+          "title": "Spell Level",
+          "type": "integer"
+        },
+        "spell_name": {
+          "description": "Spell name",
+          "title": "Spell Name",
+          "type": "string"
+        },
+        "spell_range": {
+          "default": 5,
+          "description": "Range in feet",
+          "title": "Spell Range",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "character_name_or_id",
+        "spell_name",
+        "spell_level"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "apply_effect": {
+    "annotations": null,
+    "description": "Apply an ActiveEffect to a character (SRD condition or custom effect).\n\nFor SRD conditions (blinded, charmed, deafened, exhaustion, frightened,\ngrappled, incapacitated, invisible, paralyzed, petrified, poisoned,\nprone, restrained, stunned), uses the standard condition template.\n\nFor custom effects, creates a new ActiveEffect with the provided modifiers.",
+    "inputSchema": {
+      "properties": {
+        "character_name_or_id": {
+          "description": "Character name, ID, or player name.",
+          "title": "Character Name Or Id",
+          "type": "string"
+        },
+        "custom_modifiers": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "JSON list of custom modifiers, e.g. '[{\"stat\":\"attack_roll\",\"operation\":\"add\",\"value\":2}]'",
+          "title": "Custom Modifiers"
+        },
+        "duration": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Duration in rounds. None for permanent effects.",
+          "title": "Duration"
+        },
+        "effect_name": {
+          "description": "Effect name (SRD condition like 'blinded', 'poisoned', or custom name)",
+          "title": "Effect Name",
+          "type": "string"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Source of the effect (e.g., 'Poison trap', 'Hold Person spell')",
+          "title": "Source"
+        }
+      },
+      "required": [
+        "character_name_or_id",
+        "effect_name"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "approve_sheet_change": {
+    "annotations": null,
+    "description": "Approve or reject pending player edits from a character sheet.\n\nWhen approved, changes are applied to the character's JSON data.\nWhen rejected, the sheet is regenerated from the current server data,\noverwriting the player's edits.",
+    "inputSchema": {
+      "properties": {
+        "approve": {
+          "default": true,
+          "description": "True to approve, False to reject",
+          "title": "Approve",
+          "type": "boolean"
+        },
+        "character_name": {
+          "description": "Character name to approve/reject changes for",
+          "title": "Character Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "character_name"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "ask_books": {
+    "annotations": null,
+    "description": "Ask a natural language question across all your rulebooks.\n\nUses keyword expansion with D&D concept synonyms and TF-IDF scoring\nto find relevant content across all indexed PDF and Markdown sources.\n\nExamples:\n    - \"What options do I have for a melee spellcaster?\"\n    - \"Find a class good for a dragon-themed character\"\n    - \"What healing spells are available?\"\n    - \"Show me tanky fighter options\"\n    - \"Classes with nature magic\"\n\nArgs:\n    query: Natural language question or search query\n    limit: Maximum number of results to return (default: 10)\n\nReturns:\n    Formatted search results grouped by source",
+    "inputSchema": {
+      "properties": {
+        "limit": {
+          "default": 10,
+          "description": "Maximum number of results to return",
+          "maximum": 50,
+          "minimum": 1,
+          "title": "Limit",
+          "type": "integer"
+        },
+        "query": {
+          "description": "Natural language question about your rulebooks",
+          "title": "Query",
+          "type": "string"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "build_encounter_tool": {
+    "annotations": null,
+    "description": "Return encounter suggestions with monster compositions based on party size, level, and difficulty.\n\nUses the D&D 5e encounter building rules (DMG Chapter 3) to calculate XP budgets\nand suggest balanced encounters. When rulebooks are loaded, suggests specific monsters.",
+    "inputSchema": {
+      "properties": {
+        "creature_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional creature type filter (e.g., 'undead', 'beast')",
+          "title": "Creature Type"
+        },
+        "difficulty": {
+          "default": "medium",
+          "description": "Encounter difficulty: 'easy', 'medium', 'hard', 'deadly'",
+          "title": "Difficulty",
+          "type": "string"
+        },
+        "environment": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional environment filter (e.g., 'forest', 'cave')",
+          "title": "Environment"
+        },
+        "party_level": {
+          "description": "Average party level",
+          "maximum": 20,
+          "minimum": 1,
+          "title": "Party Level",
+          "type": "integer"
+        },
+        "party_size": {
+          "description": "Number of party members",
+          "minimum": 1,
+          "title": "Party Size",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "party_size",
+        "party_level"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "bulk_update_characters": {
+    "annotations": null,
+    "description": "Update properties for multiple characters at once by a given amount.",
+    "inputSchema": {
+      "properties": {
+        "charisma_change": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Amount to change charisma by.",
+          "title": "Charisma Change"
+        },
+        "constitution_change": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Amount to change constitution by.",
+          "title": "Constitution Change"
+        },
+        "dexterity_change": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Amount to change dexterity by.",
+          "title": "Dexterity Change"
+        },
+        "hp_change": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Amount to change current HP by (positive or negative).",
+          "title": "Hp Change"
+        },
+        "intelligence_change": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Amount to change intelligence by.",
+          "title": "Intelligence Change"
+        },
+        "names_or_ids": {
+          "description": "List of character names, IDs, or player names to update.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Names Or Ids",
+          "type": "array"
+        },
+        "strength_change": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Amount to change strength by.",
+          "title": "Strength Change"
+        },
+        "temp_hp_change": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Amount to change temporary HP by (positive or negative).",
+          "title": "Temp Hp Change"
+        },
+        "wisdom_change": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Amount to change wisdom by.",
+          "title": "Wisdom Change"
+        }
+      },
+      "required": [
+        "names_or_ids"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "calculate_experience": {
+    "annotations": null,
+    "description": "Calculate experience points for an encounter.",
+    "inputSchema": {
+      "properties": {
+        "encounter_xp": {
+          "description": "Total encounter XP value",
+          "minimum": 0,
+          "title": "Encounter Xp",
+          "type": "integer"
+        },
+        "party_level": {
+          "description": "Average party level",
+          "maximum": 20,
+          "minimum": 1,
+          "title": "Party Level",
+          "type": "integer"
+        },
+        "party_size": {
+          "description": "Number of party members",
+          "minimum": 1,
+          "title": "Party Size",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "party_size",
+        "party_level",
+        "encounter_xp"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "check_for_updates": {
+    "annotations": null,
+    "description": "Check if a newer version of dm20-protocol is available.\n\nCompares the installed version with the latest on GitHub.\nReturns update status, current/latest versions, and upgrade command if needed.\nCall this at session start to notify the user about available updates.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "check_sheet_changes": {
+    "annotations": null,
+    "description": "List pending player edits from character sheet files.\n\nShows changes detected from player-edited Markdown sheets that\nare waiting for DM approval.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "combat_action": {
+    "annotations": null,
+    "description": "Resolve an attack or saving-throw spell, apply damage, and save.\n\nAttacker and target may each be a player character or a combatant\n(monster) created by start_combat; combatant IDs and names both work.\nDamage is applied automatically: temp HP first, HP floors at 0; character\ntargets also get concentration checks. Monster attack bonus and damage come\nfrom the rulebook stat block (or attack_bonus/damage_dice); damage\nresistances/immunities from the stat block apply. Returns the roll and\nthe target's new HP. If a participant, weapon or action cannot be\nresolved it returns an explanation instead and nothing changes.",
+    "inputSchema": {
+      "properties": {
+        "action_type": {
+          "default": "attack",
+          "description": "Action type: 'attack' for weapon/melee/ranged, 'save_spell' for saving throw spells",
+          "title": "Action Type",
+          "type": "string"
+        },
+        "attack_bonus": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Total attack bonus for a combatant attacker (e.g. 4 for '+4 to hit'). Overrides the stat block. Ignored for character attackers.",
+          "title": "Attack Bonus"
+        },
+        "attacker": {
+          "description": "Attacker: character name, or combatant ID/name from start_combat (e.g. 'Goblin 2')",
+          "title": "Attacker",
+          "type": "string"
+        },
+        "damage_dice": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Damage dice, e.g. '8d6' for fireball (save_spell) or '1d6+2' to override weapon/action damage (attack; one dice group plus optional modifier).",
+          "title": "Damage Dice"
+        },
+        "damage_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Damage type (e.g., 'fire', 'slashing'). For save_spell, or to override an attack's type.",
+          "title": "Damage Type"
+        },
+        "half_on_save": {
+          "default": false,
+          "description": "Whether successful save deals half damage. Only for save_spell actions.",
+          "title": "Half On Save",
+          "type": "boolean"
+        },
+        "save_ability": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Saving throw ability (e.g., 'dexterity'). Required for save_spell actions.",
+          "title": "Save Ability"
+        },
+        "spell_dc": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Spell save DC. Optional for character casters (computed); required when the caster is a combatant.",
+          "title": "Spell Dc"
+        },
+        "target": {
+          "description": "Target: character name, or combatant ID/name from start_combat",
+          "title": "Target",
+          "type": "string"
+        },
+        "weapon_or_spell": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Character: weapon name from inventory/equipment (None = equipped main weapon). Monster combatant: stat-block action name, e.g. 'Scimitar' (None = first attack action).",
+          "title": "Weapon Or Spell"
+        }
+      },
+      "required": [
+        "attacker",
+        "target"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "configure_claudmaster": {
+    "annotations": null,
+    "description": "Configure the Claudmaster AI DM settings for the current campaign.\n\nCall with no arguments to view current configuration.\nProvide specific fields to update only those settings (partial update).\nSet model_profile to switch all model settings at once (quality/balanced/economy).\nSet interaction_mode to switch how the DM communicates (independent of model_profile).\nSet reset_to_defaults=True to restore all settings to their default values.",
+    "inputSchema": {
+      "properties": {
+        "agent_timeout": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Maximum seconds per agent call (> 0)",
+          "title": "Agent Timeout"
+        },
+        "dialogue_style": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Dialogue style: natural, theatrical, formal, casual, etc.",
+          "title": "Dialogue Style"
+        },
+        "difficulty": {
+          "anyOf": [
+            {
+              "enum": [
+                "easy",
+                "normal",
+                "hard",
+                "deadly"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Game difficulty",
+          "title": "Difficulty"
+        },
+        "fudge_rolls": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether DM can fudge dice rolls for narrative purposes",
+          "title": "Fudge Rolls"
+        },
+        "improvisation_level": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "AI improvisation level: 0=None, 1=Low, 2=Medium, 3=High, 4=Full",
+          "title": "Improvisation Level"
+        },
+        "interaction_mode": {
+          "anyOf": [
+            {
+              "enum": [
+                "classic",
+                "narrated",
+                "immersive"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Switch interaction mode: 'classic' (text-only), 'narrated' (TTS + text), 'immersive' (TTS + STT). Takes effect immediately.",
+          "title": "Interaction Mode"
+        },
+        "llm_model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "LLM model identifier (e.g., 'claude-opus-5-5')",
+          "title": "Llm Model"
+        },
+        "max_tokens": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Maximum tokens in LLM response (256-200000)",
+          "title": "Max Tokens"
+        },
+        "model_profile": {
+          "anyOf": [
+            {
+              "enum": [
+                "quality",
+                "balanced",
+                "economy"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Switch model quality profile. Updates all model settings and CC agent files at once.",
+          "title": "Model Profile"
+        },
+        "narrative_style": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Narrative style: descriptive, concise, dramatic, cinematic, etc.",
+          "title": "Narrative Style"
+        },
+        "reset_to_defaults": {
+          "default": false,
+          "description": "Reset all settings to defaults",
+          "title": "Reset To Defaults",
+          "type": "boolean"
+        },
+        "temperature": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Deprecated and ignored: current Claude models reject sampling parameters. Use effort instead.",
+          "title": "Temperature"
+        }
+      },
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "create_campaign": {
+    "annotations": null,
+    "description": "Create a new D&D campaign.\n\nThe rules_version parameter selects which edition of the D&D 5e rules\nto use for this campaign. '2024' uses the revised 2024 rules, '2014'\nuses the original 5th edition rules.\n\nThe interaction_mode parameter controls how the DM communicates:\n- classic: Text-only, no voice dependencies required.\n- narrated: DM responses delivered as TTS audio + text via WebSocket.\n- immersive: Narrated + player STT input from browser.\n\nInteraction mode and model profile are independent axes — any combination is valid.",
+    "inputSchema": {
+      "properties": {
+        "description": {
+          "description": "Brief decription of the campaign, or a tagline",
+          "title": "Description",
+          "type": "string"
+        },
+        "dm_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Dungeon Master name",
+          "title": "Dm Name"
+        },
+        "interaction_mode": {
+          "default": "classic",
+          "description": "Interaction mode: 'classic' (text-only), 'narrated' (TTS audio + text), 'immersive' (narrated + STT input). Default: 'classic'",
+          "enum": [
+            "classic",
+            "narrated",
+            "immersive"
+          ],
+          "title": "Interaction Mode",
+          "type": "string"
+        },
+        "name": {
+          "description": "Campaign name",
+          "title": "Name",
+          "type": "string"
+        },
+        "rules_version": {
+          "default": "2024",
+          "description": "D&D rules version: '2014' or '2024' (default: '2024')",
+          "title": "Rules Version",
+          "type": "string"
+        },
+        "setting": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "format": "path",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "\n        Campaign setting - a full description of the setting of the campaign in markdown format, or the path to a `.txt` or `.md` file containing the same.\n        ",
+          "title": "Setting"
+        }
+      },
+      "required": [
+        "name",
+        "description"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "create_character": {
+    "annotations": null,
+    "description": "Create a new player character.\n\nWhen a rulebook is loaded, auto-populates the character with saving throws,\nproficiencies, starting equipment, features, HP, spell slots, and more from\nthe class, race, and background definitions. Requires a rulebook to be loaded\n(use load_rulebook source=\"srd\" first).\n\nWithout a rulebook, returns an error message asking to load one first.",
+    "inputSchema": {
+      "properties": {
+        "ability_assignments": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "JSON dict for standard_array/point_buy: {\"strength\": 15, \"dexterity\": 14, ...}",
+          "title": "Ability Assignments"
+        },
+        "ability_method": {
+          "default": "manual",
+          "description": "Ability score method: 'manual' (default), 'standard_array', or 'point_buy'",
+          "title": "Ability Method",
+          "type": "string"
+        },
+        "additional_classes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "JSON list for multiclass: [{\"name\": \"Wizard\", \"level\": 3, \"subclass\": \"Evocation\"}]",
+          "title": "Additional Classes"
+        },
+        "alignment": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Character alignment",
+          "title": "Alignment"
+        },
+        "background": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Character background",
+          "title": "Background"
+        },
+        "bio": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The character's backstory, personality, and motivations.",
+          "title": "Bio"
+        },
+        "character_class": {
+          "description": "Primary character class",
+          "title": "Character Class",
+          "type": "string"
+        },
+        "charisma": {
+          "default": 10,
+          "description": "Charisma score (manual mode)",
+          "maximum": 30,
+          "minimum": 1,
+          "title": "Charisma",
+          "type": "integer"
+        },
+        "class_level": {
+          "description": "Primary class level",
+          "maximum": 20,
+          "minimum": 1,
+          "title": "Class Level",
+          "type": "integer"
+        },
+        "constitution": {
+          "default": 10,
+          "description": "Constitution score (manual mode)",
+          "maximum": 30,
+          "minimum": 1,
+          "title": "Constitution",
+          "type": "integer"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A brief description of the character's appearance and demeanor.",
+          "title": "Description"
+        },
+        "dexterity": {
+          "default": 10,
+          "description": "Dexterity score (manual mode)",
+          "maximum": 30,
+          "minimum": 1,
+          "title": "Dexterity",
+          "type": "integer"
+        },
+        "intelligence": {
+          "default": 10,
+          "description": "Intelligence score (manual mode)",
+          "maximum": 30,
+          "minimum": 1,
+          "title": "Intelligence",
+          "type": "integer"
+        },
+        "name": {
+          "description": "Character name",
+          "title": "Name",
+          "type": "string"
+        },
+        "player_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The name of the player in control of this character",
+          "title": "Player Name"
+        },
+        "race": {
+          "description": "Character race",
+          "title": "Race",
+          "type": "string"
+        },
+        "strength": {
+          "default": 10,
+          "description": "Strength score (manual mode)",
+          "maximum": 30,
+          "minimum": 1,
+          "title": "Strength",
+          "type": "integer"
+        },
+        "subclass": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Primary class subclass name (required if level >= subclass level)",
+          "title": "Subclass"
+        },
+        "subrace": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Subrace name (e.g., 'Hill Dwarf')",
+          "title": "Subrace"
+        },
+        "wisdom": {
+          "default": 10,
+          "description": "Wisdom score (manual mode)",
+          "maximum": 30,
+          "minimum": 1,
+          "title": "Wisdom",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "character_class",
+        "class_level",
+        "race"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "create_location": {
+    "annotations": null,
+    "description": "Create a new location.",
+    "inputSchema": {
+      "properties": {
+        "description": {
+          "description": "Location description",
+          "title": "Description",
+          "type": "string"
+        },
+        "government": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Government type",
+          "title": "Government"
+        },
+        "location_type": {
+          "description": "Type of location (city, town, village, dungeon, etc.)",
+          "title": "Location Type",
+          "type": "string"
+        },
+        "name": {
+          "description": "Location name",
+          "title": "Name",
+          "type": "string"
+        },
+        "notable_features": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Notable features",
+          "title": "Notable Features"
+        },
+        "notes": {
+          "default": "",
+          "description": "Additional notes",
+          "title": "Notes",
+          "type": "string"
+        },
+        "population": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Population (if applicable)",
+          "title": "Population"
+        }
+      },
+      "required": [
+        "name",
+        "location_type",
+        "description"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "create_npc": {
+    "annotations": null,
+    "description": "Create a new NPC.",
+    "inputSchema": {
+      "properties": {
+        "attitude": {
+          "anyOf": [
+            {
+              "enum": [
+                "friendly",
+                "neutral",
+                "hostile",
+                "unknown"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Attitude towards party",
+          "title": "Attitude"
+        },
+        "bio": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A detailed, private bio for the NPC, including secrets.",
+          "title": "Bio"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A brief, public description of the NPC.",
+          "title": "Description"
+        },
+        "location": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Current location",
+          "title": "Location"
+        },
+        "name": {
+          "description": "NPC name",
+          "title": "Name",
+          "type": "string"
+        },
+        "notes": {
+          "default": "",
+          "description": "Additional notes",
+          "title": "Notes",
+          "type": "string"
+        },
+        "occupation": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "NPC occupation",
+          "title": "Occupation"
+        },
+        "race": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "NPC race",
+          "title": "Race"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "create_quest": {
+    "annotations": null,
+    "description": "Create a new quest.",
+    "inputSchema": {
+      "properties": {
+        "description": {
+          "description": "Quest description",
+          "title": "Description",
+          "type": "string"
+        },
+        "giver": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Quest giver (NPC name)",
+          "title": "Giver"
+        },
+        "notes": {
+          "default": "",
+          "description": "Additional notes",
+          "title": "Notes",
+          "type": "string"
+        },
+        "objectives": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Quest objectives",
+          "title": "Objectives"
+        },
+        "reward": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Quest reward",
+          "title": "Reward"
+        },
+        "title": {
+          "description": "Quest title",
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "description"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "delete_campaign": {
+    "annotations": null,
+    "description": "Delete a campaign permanently. This cannot be undone.",
+    "inputSchema": {
+      "properties": {
+        "name": {
+          "description": "Campaign name to delete",
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "delete_character": {
+    "annotations": null,
+    "description": "Delete a character from the current campaign. Accepts character name, ID, or player name.",
+    "inputSchema": {
+      "properties": {
+        "name_or_id": {
+          "description": "Character name, ID, or player name.",
+          "title": "Name Or Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name_or_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "disable_library_source": {
+    "annotations": null,
+    "description": "Disable a library source for the current campaign.\n\nRemoves a library source from the campaign's enabled content.\nThe source will no longer be available for use in this campaign.\n\nArgs:\n    source_id: The source identifier (use list_enabled_library to see enabled sources)",
+    "inputSchema": {
+      "properties": {
+        "source_id": {
+          "description": "The source identifier to disable",
+          "title": "Source Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "discover_adventures": {
+    "annotations": null,
+    "description": "Discover D&D adventures by theme, keyword, level range, or storyline.\n\nSearch and browse official D&D 5e adventure modules from the 5etools\nindex. Results are grouped by storyline and presented without spoilers.\n\nEmpty query with no filters returns a summary of all available storylines.\n\nKeyword mapping examples:\n- \"vampire\", \"gothic\", \"horror\" → Ravenloft\n- \"school\", \"magic school\" → Strixhaven\n- \"dragon\", \"cult\" → Tyranny of Dragons\n- \"heist\" → Keys from the Golden Vault, Waterdeep\n- \"space\" → Spelljammer",
+    "inputSchema": {
+      "properties": {
+        "level_max": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Maximum character level filter",
+          "title": "Level Max"
+        },
+        "level_min": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Minimum character level filter",
+          "title": "Level Min"
+        },
+        "limit": {
+          "default": 10,
+          "description": "Maximum number of results",
+          "title": "Limit",
+          "type": "integer"
+        },
+        "query": {
+          "default": "",
+          "description": "Keyword search (theme, name, etc.)",
+          "title": "Query",
+          "type": "string"
+        },
+        "storyline": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Filter by storyline",
+          "title": "Storyline"
+        }
+      },
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "enable_library_source": {
+    "annotations": null,
+    "description": "Enable a library source for the current campaign.\n\nAdds a library source to the campaign's enabled content. You can enable\nthe entire source or filter by content type and specific items.\n\nExamples:\n    - enable_library_source(\"tome-of-heroes\") - Enable all content\n    - enable_library_source(\"tome-of-heroes\", content_type=\"class\") - Enable all classes\n    - enable_library_source(\"tome-of-heroes\", content_type=\"class\", content_names=[\"dragon-knight\"]) - Enable specific class",
+    "inputSchema": {
+      "properties": {
+        "content_names": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Specific content names to enable (e.g., ['dragon-knight', 'shadow-dancer']). Only used if content_type is specified.",
+          "title": "Content Names"
+        },
+        "content_type": {
+          "anyOf": [
+            {
+              "enum": [
+                "all",
+                "class",
+                "race",
+                "spell",
+                "monster",
+                "feat",
+                "item",
+                "background",
+                "subclass"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": "all",
+          "description": "Filter by content type. Use 'all' or omit to enable entire source.",
+          "title": "Content Type"
+        },
+        "source_id": {
+          "description": "The source identifier (e.g., 'tome-of-heroes')",
+          "title": "Source Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "end_claudmaster_session": {
+    "annotations": null,
+    "description": "End or pause a Claudmaster AI DM session, saving all state.",
+    "inputSchema": {
+      "properties": {
+        "campaign_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional path for disk persistence",
+          "title": "Campaign Path"
+        },
+        "mode": {
+          "default": "pause",
+          "description": "'pause' to save for later, 'end' for final termination",
+          "title": "Mode",
+          "type": "string"
+        },
+        "session_id": {
+          "description": "The session ID to end or pause",
+          "title": "Session Id",
+          "type": "string"
+        },
+        "summary_notes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional DM notes to save with the session",
+          "title": "Summary Notes"
+        }
+      },
+      "required": [
+        "session_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "end_combat": {
+    "annotations": null,
+    "description": "End the current combat encounter and clear initiative and combatants.\n\nReports participants, character casualties (HP <= 0), defeated\ncombatants (HP <= 0) and the total XP of defeated combatants whose CR is\nknown. XP is reported only; it is not awarded to characters.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "equip_item": {
+    "annotations": null,
+    "description": "Equip an item from inventory to an equipment slot.\n\nMoves the item from the character's inventory to the specified equipment slot.\nIf the slot is already occupied, the current item is automatically unequipped\nback to inventory first.",
+    "inputSchema": {
+      "properties": {
+        "character_name_or_id": {
+          "description": "Character name, ID, or player name",
+          "title": "Character Name Or Id",
+          "type": "string"
+        },
+        "item_name_or_id": {
+          "description": "Item name or ID from inventory",
+          "title": "Item Name Or Id",
+          "type": "string"
+        },
+        "player_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Player ID for permission check (omit for single-player DM mode)",
+          "title": "Player Id"
+        },
+        "slot": {
+          "description": "Equipment slot: weapon_main, weapon_off, armor, or shield",
+          "title": "Slot",
+          "type": "string"
+        }
+      },
+      "required": [
+        "character_name_or_id",
+        "item_name_or_id",
+        "slot"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "export_character_sheet": {
+    "annotations": null,
+    "description": "Export a character to a Markdown sheet file.\n\nGenerates a beautiful Markdown character sheet with YAML frontmatter\nin the campaign's sheets/ directory. The sheet can be viewed in any\nMarkdown editor, with optional Meta-Bind support for Obsidian.",
+    "inputSchema": {
+      "properties": {
+        "name_or_id": {
+          "description": "Character name, ID, or player name",
+          "title": "Name Or Id",
+          "type": "string"
+        },
+        "player_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Player ID for permission check (omit for single-player DM mode)",
+          "title": "Player Id"
+        }
+      },
+      "required": [
+        "name_or_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "export_pack": {
+    "annotations": null,
+    "description": "Export campaign content as a portable compendium pack.\n\nCreates a JSON pack file containing selected campaign entities (NPCs,\nlocations, quests, encounters).  Supports selective export by entity\ntype, location filter, or full campaign backup.\n\nThe pack is saved to the packs/ directory inside the data folder.",
+    "inputSchema": {
+      "properties": {
+        "author": {
+          "default": "",
+          "description": "Pack author",
+          "title": "Author",
+          "type": "string"
+        },
+        "description": {
+          "default": "",
+          "description": "Pack description",
+          "title": "Description",
+          "type": "string"
+        },
+        "entity_types": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Comma-separated entity types to include: npcs, locations, quests, encounters. Omit for all.",
+          "title": "Entity Types"
+        },
+        "full_backup": {
+          "default": false,
+          "description": "If true, export ALL entities plus game state and sessions as a full backup",
+          "title": "Full Backup",
+          "type": "boolean"
+        },
+        "location_filter": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Only include entities associated with this location (case-insensitive substring match)",
+          "title": "Location Filter"
+        },
+        "name": {
+          "description": "Name for the exported pack",
+          "title": "Name",
+          "type": "string"
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Comma-separated tags (e.g., 'horror,undead,ravenloft')",
+          "title": "Tags"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "extract_content": {
+    "annotations": null,
+    "description": "Extract content from a PDF source and save as CustomSource JSON.\n\nExtracts the full content definition from a PDF source based on the\ntable of contents entry. The extracted content is saved to the\nlibrary/extracted/{source_id}/ directory in CustomSource JSON format,\nready to be loaded by the rulebook system.\n\nExamples:\n    - extract_content(\"tome-of-heroes\", \"Fighter\", \"class\")\n    - extract_content(\"phb\", \"Elf\", \"race\")\n    - extract_content(\"phb\", \"Fireball\", \"spell\")\n\nArgs:\n    source_id: The source identifier (use list_library to see available sources)\n    content_name: Name of the content to extract (as shown in TOC)\n    content_type: Type of content (class, race, spell, monster, feat, item)\n\nReturns:\n    Success message with path to extracted file, or error message",
+    "inputSchema": {
+      "properties": {
+        "content_name": {
+          "description": "Name of the content to extract (e.g., 'Fighter', 'Elf')",
+          "title": "Content Name",
+          "type": "string"
+        },
+        "content_type": {
+          "description": "Type of content to extract",
+          "enum": [
+            "class",
+            "race",
+            "spell",
+            "monster",
+            "feat",
+            "item"
+          ],
+          "title": "Content Type",
+          "type": "string"
+        },
+        "source_id": {
+          "description": "The source identifier (e.g., 'tome-of-heroes')",
+          "title": "Source Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_id",
+        "content_name",
+        "content_type"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "get_campaign_info": {
+    "annotations": null,
+    "description": "Get information about the current campaign.\n\nReturns campaign information including name, description, counts of various entities,\nand current game state.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "get_character": {
+    "annotations": null,
+    "description": "Get detailed character information. Accepts character name, ID, or player name.",
+    "inputSchema": {
+      "properties": {
+        "name_or_id": {
+          "description": "Character name, ID, or player name",
+          "title": "Name Or Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name_or_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "get_class_info": {
+    "annotations": null,
+    "description": "Get full class definition from loaded rulebooks.\n\nLists subclasses from every loaded source; with ``level`` shows class (and\nsubclass) features by level and the spell slots at that level.\n\nWorks without a campaign loaded (uses global rulebook manager).\nWhen a campaign is active, its rulebook manager takes priority.",
+    "inputSchema": {
+      "properties": {
+        "level": {
+          "anyOf": [
+            {
+              "maximum": 20,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Show features up to this level",
+          "title": "Level"
+        },
+        "name": {
+          "description": "Class name (e.g., 'wizard', 'fighter')",
+          "title": "Name",
+          "type": "string"
+        },
+        "subclass": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Also show this subclass's features (e.g. 'echo knight')",
+          "title": "Subclass"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "get_claudmaster_session_state": {
+    "annotations": null,
+    "description": "Get the current state of a Claudmaster AI DM session.",
+    "inputSchema": {
+      "properties": {
+        "detail_level": {
+          "default": "standard",
+          "description": "Detail level: 'minimal', 'standard', or 'full'",
+          "title": "Detail Level",
+          "type": "string"
+        },
+        "history_limit": {
+          "default": 10,
+          "description": "Max number of history entries to return",
+          "title": "History Limit",
+          "type": "integer"
+        },
+        "include_history": {
+          "default": true,
+          "description": "Whether to include action history",
+          "title": "Include History",
+          "type": "boolean"
+        },
+        "session_id": {
+          "description": "The session ID to query",
+          "title": "Session Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "session_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "get_events": {
+    "annotations": null,
+    "description": "Get events from the adventure log.",
+    "inputSchema": {
+      "properties": {
+        "event_type": {
+          "anyOf": [
+            {
+              "enum": [
+                "combat",
+                "roleplay",
+                "exploration",
+                "quest",
+                "character",
+                "world",
+                "session"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Filter by event type",
+          "title": "Event Type"
+        },
+        "limit": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Maximum number of events to return",
+          "title": "Limit"
+        },
+        "search": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Search events by title/description",
+          "title": "Search"
+        }
+      },
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "get_game_state": {
+    "annotations": null,
+    "description": "Get the current game state.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "get_library_toc": {
+    "annotations": null,
+    "description": "Get the table of contents for a specific library source.\n\nReturns the full hierarchical table of contents extracted from\nthe PDF or Markdown source, with page numbers and content types.\n\nArgs:\n    source_id: The source identifier (use list_library to see available sources)",
+    "inputSchema": {
+      "properties": {
+        "source_id": {
+          "description": "The source identifier (e.g., 'tome-of-heroes')",
+          "title": "Source Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "get_location": {
+    "annotations": null,
+    "description": "Get location information.",
+    "inputSchema": {
+      "properties": {
+        "discovery_filter": {
+          "default": false,
+          "description": "Filter notable features by discovery state. When True, only features the party has discovered (GLIMPSED+) are shown. Default: False",
+          "title": "Discovery Filter",
+          "type": "boolean"
+        },
+        "name": {
+          "description": "Location name",
+          "title": "Name",
+          "type": "string"
+        },
+        "player_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Caller's player ID for output filtering. When provided, combines discovery filter + permission filter: non-DM callers see only discovered features and no DM notes.",
+          "title": "Player Id"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "get_monster_info": {
+    "annotations": null,
+    "description": "Get monster stat block from loaded rulebooks.\n\nWorks without a campaign loaded (uses global rulebook manager).\nWhen a campaign is active, its rulebook manager takes priority.",
+    "inputSchema": {
+      "properties": {
+        "name": {
+          "description": "Monster name (e.g., 'goblin', 'adult red dragon')",
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "get_npc": {
+    "annotations": null,
+    "description": "Get NPC information.",
+    "inputSchema": {
+      "properties": {
+        "name_or_id": {
+          "description": "NPC name or ID",
+          "title": "Name Or Id",
+          "type": "string"
+        },
+        "player_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Caller's player ID for output filtering. When provided, DM-only fields (bio, notes, stats, relationships) are stripped for non-DM callers.",
+          "title": "Player Id"
+        }
+      },
+      "required": [
+        "name_or_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "get_party_status": {
+    "annotations": null,
+    "description": "Get the current status of the Party Mode server.\n\nShows server info, connected players, and action queue stats.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "get_race_info": {
+    "annotations": null,
+    "description": "Get full race definition from loaded rulebooks.\n\nWorks without a campaign loaded (uses global rulebook manager).\nWhen a campaign is active, its rulebook manager takes priority.",
+    "inputSchema": {
+      "properties": {
+        "name": {
+          "description": "Race name (e.g., 'elf', 'dwarf')",
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "get_release_notes": {
+    "annotations": null,
+    "description": "Fetch the latest release notes from the CHANGELOG.\n\nReturns the most recent changelog entries (Unreleased + last released version)\nfrom the GitHub repository. Use this to show users what's new.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "get_sessions": {
+    "annotations": null,
+    "description": "Get all session notes.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "get_spell_info": {
+    "annotations": null,
+    "description": "Get spell details from loaded rulebooks.\n\nWorks without a campaign loaded (uses global rulebook manager).\nWhen a campaign is active, its rulebook manager takes priority.",
+    "inputSchema": {
+      "properties": {
+        "name": {
+          "description": "Spell name (e.g., 'fireball', 'cure wounds')",
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "import_character_file": {
+    "annotations": null,
+    "description": "Import a character from a local JSON file into the current campaign.\n\nCurrently supports D&D Beyond JSON format. Save the JSON from your browser's\ndeveloper tools (Network tab -> character request -> Response).",
+    "inputSchema": {
+      "properties": {
+        "file_path": {
+          "description": "Path to the D&D Beyond JSON file",
+          "title": "File Path",
+          "type": "string"
+        },
+        "player_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Player name to assign to the character",
+          "title": "Player Name"
+        },
+        "source_format": {
+          "default": "dndbeyond",
+          "description": "Format of the JSON file",
+          "title": "Source Format",
+          "type": "string"
+        }
+      },
+      "required": [
+        "file_path"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "import_from_dndbeyond": {
+    "annotations": null,
+    "description": "Import a public D&D Beyond character into the current campaign.\n\nProvide a D&D Beyond character URL (e.g., https://www.dndbeyond.com/characters/12345678)\nor just the numeric character ID. The character must be set to Public on D&D Beyond.",
+    "inputSchema": {
+      "properties": {
+        "player_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Player name to assign to the character",
+          "title": "Player Name"
+        },
+        "url_or_id": {
+          "description": "D&D Beyond character URL or numeric ID",
+          "title": "Url Or Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url_or_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "import_pack": {
+    "annotations": null,
+    "description": "Import a compendium pack into the current campaign.\n\nLoads a CompendiumPack JSON file and imports its entities (NPCs, locations,\nquests, encounters) into the active campaign. Handles name conflicts via\nthe chosen conflict mode. Regenerates all entity IDs and re-links cross-references.\n\nUse preview=true for a dry-run that shows what would happen without changing anything.",
+    "inputSchema": {
+      "properties": {
+        "conflict_mode": {
+          "default": "skip",
+          "description": "Conflict resolution: 'skip' (keep existing), 'overwrite' (replace), 'rename' (add suffix)",
+          "title": "Conflict Mode",
+          "type": "string"
+        },
+        "entity_filter": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Comma-separated entity types to import: npcs, locations, quests, encounters. Omit for all.",
+          "title": "Entity Filter"
+        },
+        "file_path": {
+          "description": "Path to the pack JSON file to import",
+          "title": "File Path",
+          "type": "string"
+        },
+        "preview": {
+          "default": false,
+          "description": "If true, show what would be imported without making changes",
+          "title": "Preview",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "file_path"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "level_up_character": {
+    "annotations": null,
+    "description": "Level up a character by one level and save.\n\nIncrements level, adds HP, hit dice, class and subclass features,\nrecomputes spell slots (standard 5e tables when the rulebook has none;\nPact Magic kept separate) and class resources, applies ASI choices, and\nsets the subclass at the class's subclass level. Requires a loaded rulebook.\n\nAtomic: on any error (unknown class, invalid subclass, bad ASI, level 20)\nnothing is changed and the reply starts with '❌'. An invalid subclass error\nlists the valid options; if the rulebook knows no subclasses for the class,\nany name is accepted as free text with a warning.\n\nMulticlass: if class_name is a class the character doesn't have yet,\nthis acts as a multiclass dip — adding that class at level 1.",
+    "inputSchema": {
+      "properties": {
+        "asi_choices": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "JSON dict for ASI: {\"strength\": 2} or {\"strength\": 1, \"dexterity\": 1}",
+          "title": "Asi Choices"
+        },
+        "class_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Which class to level up (for multiclass characters). If omitted, levels up primary class.",
+          "title": "Class Name"
+        },
+        "hp_method": {
+          "default": "average",
+          "description": "HP increase method: 'average' (default, PHB standard) or 'roll'",
+          "title": "Hp Method",
+          "type": "string"
+        },
+        "name_or_id": {
+          "description": "Character name, ID, or player name",
+          "title": "Name Or Id",
+          "type": "string"
+        },
+        "new_spells": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "JSON list of new spells learned: [\"fireball\", \"counterspell\"]",
+          "title": "New Spells"
+        },
+        "player_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Player ID for permission check (omit for single-player DM mode)",
+          "title": "Player Id"
+        },
+        "subclass": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Subclass to select (at subclass level, typically 3)",
+          "title": "Subclass"
+        }
+      },
+      "required": [
+        "name_or_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "list_campaigns": {
+    "annotations": null,
+    "description": "List all available campaigns.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "list_characters": {
+    "annotations": null,
+    "description": "List all characters in the current campaign.\n\nReturns a list of all player characters with their basic information.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "list_enabled_library": {
+    "annotations": null,
+    "description": "List all library sources enabled for the current campaign.\n\nReturns a formatted list of all library sources that have been\nenabled for use in the current campaign, including any content filters.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "list_library": {
+    "annotations": null,
+    "description": "List all sources in the library with their content summaries.\n\nReturns a formatted list of all PDF and Markdown sources\nin the library, showing their index status and content counts.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "list_locations": {
+    "annotations": null,
+    "description": "List all locations in the current campaign.\n\nReturns a list of all locations with their basic information.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "list_npcs": {
+    "annotations": null,
+    "description": "List all NPCs in the current campaign.\n\nReturns a list of all non-player characters with their basic information.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "list_packs": {
+    "annotations": null,
+    "description": "List all available compendium packs in the packs directory.\n\nScans the packs/ directory for JSON pack files and returns their names,\ndescriptions, entity counts, and file paths.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "list_quests": {
+    "annotations": null,
+    "description": "List quests, optionally filtered by status.\n\nReturns a list of quests with their basic information and status.",
+    "inputSchema": {
+      "properties": {
+        "status": {
+          "anyOf": [
+            {
+              "enum": [
+                "active",
+                "completed",
+                "failed",
+                "on_hold"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Filter by status",
+          "title": "Status"
+        }
+      },
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "list_rulebooks": {
+    "annotations": null,
+    "description": "List all active rulebooks in the current campaign.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "load_adventure": {
+    "annotations": null,
+    "description": "Load a D&D adventure module and integrate it with your campaign.\n\nThis tool orchestrates the complete adventure loading workflow:\n1. Downloads and parses adventure content from 5etools (or uses cached version)\n2. Creates a new campaign or uses the current one\n3. Binds the module to the campaign for progress tracking\n4. Auto-populates Chapter 1 entities (locations, NPCs, starting quest) to begin play\n\nThe tool respects spoiler boundaries: only Chapter 1 content is revealed.\nLater chapters remain hidden until you progress through the adventure.\n\nExamples:\n- `load_adventure(\"CoS\")` - Load Curse of Strahd into current campaign\n- `load_adventure(\"LMoP\", \"Lost Mine Campaign\")` - Create new campaign for Lost Mine of Phandelver\n- `load_adventure(\"SCC-CK\", populate_chapter_1=False)` - Load Strixhaven intro without auto-population\n\nCommon adventure IDs:\n- CoS: Curse of Strahd\n- LMoP: Lost Mine of Phandelver\n- HotDQ: Hoard of the Dragon Queen\n- PotA: Princes of the Apocalypse\n- OotA: Out of the Abyss\n- ToA: Tomb of Annihilation\n- WDH: Waterdeep: Dragon Heist\n- WDMM: Waterdeep: Dungeon of the Mad Mage\n- BGDIA: Baldur's Gate: Descent into Avernus\n\nUse the `discover_adventures` tool to search for more adventures by theme or level range.",
+    "inputSchema": {
+      "properties": {
+        "adventure_id": {
+          "description": "Adventure ID from 5etools (e.g., 'CoS', 'LMoP', 'SCC-CK')",
+          "title": "Adventure Id",
+          "type": "string"
+        },
+        "campaign_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Name for new campaign. If not provided, uses current campaign",
+          "title": "Campaign Name"
+        },
+        "populate_chapter_1": {
+          "default": true,
+          "description": "Auto-create Chapter 1 locations, NPCs, and starting quest",
+          "title": "Populate Chapter 1",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "adventure_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "load_campaign": {
+    "annotations": null,
+    "description": "Load a specific campaign.",
+    "inputSchema": {
+      "properties": {
+        "name": {
+          "description": "Campaign name to load",
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "load_rulebook": {
+    "annotations": null,
+    "description": "Load a rulebook into the current campaign.\n\nSRD loads are tolerant per category: missing endpoints are skipped and listed\nin the result. 5etools loads can be filtered by source and edition.",
+    "inputSchema": {
+      "properties": {
+        "edition": {
+          "anyOf": [
+            {
+              "enum": [
+                "2014",
+                "2024"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "5etools only: preferred edition when an entry has a 2014 and a 2024 version. Default: 2024.",
+          "title": "Edition"
+        },
+        "exclude_sources": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "5etools only: source abbreviations to skip, e.g. ['UA']",
+          "title": "Exclude Sources"
+        },
+        "path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Path to custom rulebook file (JSON). Required for custom sources.",
+          "title": "Path"
+        },
+        "refresh": {
+          "default": false,
+          "description": "5etools only: revalidate the download cache (ETag) before loading",
+          "title": "Refresh",
+          "type": "boolean"
+        },
+        "source": {
+          "description": "Source type: 'srd' for official D&D 5e SRD, 'custom' for local files, 'open5e' for Open5e API, '5etools' for 5etools JSON data",
+          "enum": [
+            "srd",
+            "custom",
+            "open5e",
+            "5etools"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "sources": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "5etools only: allowlist of source abbreviations, e.g. ['XPHB','XMM','EGW']. Default: all.",
+          "title": "Sources"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": "2014",
+          "description": "SRD version: '2014' (default) or '2024'. Ignored for custom sources.",
+          "title": "Version"
+        }
+      },
+      "required": [
+        "source"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "long_rest": {
+    "annotations": null,
+    "description": "Perform a long rest for a character and save.\n\nRestores all spell slots and pact slots, refills every class resource with\nrecharge 'short' or 'long' (not 'none'), restores hit dice (half of total,\nminimum 1), clears death saves, and optionally restores HP to maximum.",
+    "inputSchema": {
+      "properties": {
+        "character_name_or_id": {
+          "description": "Character name, ID, or player name",
+          "title": "Character Name Or Id",
+          "type": "string"
+        },
+        "player_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Player ID for permission check (omit for single-player DM mode)",
+          "title": "Player Id"
+        },
+        "restore_hp": {
+          "default": true,
+          "description": "Restore HP to maximum (default: true)",
+          "title": "Restore Hp",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "character_name_or_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "next_turn": {
+    "annotations": null,
+    "description": "Advance to the next turn in combat.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "open_library_folder": {
+    "annotations": null,
+    "description": "Open the library folder where users can drop PDF and Markdown rulebooks.\n\nCreates the library/pdfs/ directory if it doesn't exist, then opens it\nin the system file manager (Finder on macOS, file manager on Linux).\n\nReturns the absolute path to the folder with instructions on next steps.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "party_get_prefetch": {
+    "annotations": null,
+    "description": "Retrieve a pre-generated narrative variant for a combat turn.\n\nIf the prefetch engine has a cached variant for this turn, returns a\nrefined narrative instantly (no main-model call needed). On cache miss,\nfalls back to full generation with the main model.\n\nCall this right after party_thinking, before writing your own narrative.\nIf 'cached' is true in the response, use 'narrative' as your starting\npoint and adjust only the details that differ from actual game state.",
+    "inputSchema": {
+      "properties": {
+        "damage": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Damage dealt (for hit/critical)",
+          "title": "Damage"
+        },
+        "outcome": {
+          "description": "Actual combat outcome: 'hit', 'miss', or 'critical'",
+          "title": "Outcome",
+          "type": "string"
+        },
+        "roll": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The actual attack roll value",
+          "title": "Roll"
+        },
+        "target_hp": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Target's remaining HP after damage",
+          "title": "Target Hp"
+        },
+        "turn_id": {
+          "description": "Turn identifier — use the same format as the observer: 'round_{N}_{character_name}', e.g. 'round_3_Aria'",
+          "title": "Turn Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "turn_id",
+        "outcome"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "party_kick_player": {
+    "annotations": null,
+    "description": "Kick a player from the Party Mode session.\n\nDisconnects their WebSocket, revokes their token, and deactivates\nthem in the PC registry. They will need a new token to rejoin.",
+    "inputSchema": {
+      "properties": {
+        "player_name": {
+          "description": "Player name or character ID to kick",
+          "title": "Player Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "player_name"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "party_knowledge": {
+    "annotations": null,
+    "description": "Query what the party knows about the world.\n\nSearches the party's collective knowledge — facts they have learned\nthrough NPC interactions, observation, investigation, reading, and other\nmeans. Returns matching facts with details on how they were learned.\n\nUse with no arguments to list all known facts. Provide a topic to search\nfor specific knowledge. Optionally filter by source or acquisition method.",
+    "inputSchema": {
+      "properties": {
+        "method_filter": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Filter by acquisition method: told_by_npc, observed, investigated, read, overheard, deduced, magical, common_knowledge",
+          "title": "Method Filter"
+        },
+        "source_filter": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Filter by knowledge source (e.g., NPC name)",
+          "title": "Source Filter"
+        },
+        "topic": {
+          "default": "",
+          "description": "Topic to search party knowledge about (e.g., 'dragon', 'Strahd', 'curse')",
+          "title": "Topic",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "party_pop_action": {
+    "annotations": null,
+    "description": "Pop the next pending player action from the Party Mode queue.\n\nReturns the action details (player_id, action_id, text, timestamp) and\nremaining queue count, or reports that the queue is empty.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "party_refresh_token": {
+    "annotations": null,
+    "description": "Generate a new token and QR code for a player, invalidating their old token.\n\nUse when a player needs a new connection link (lost QR code, security concern,\nor after being kicked and readmitted).",
+    "inputSchema": {
+      "properties": {
+        "player_name": {
+          "description": "Player name or character ID to refresh token for",
+          "title": "Player Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "player_name"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "party_resolve_action": {
+    "annotations": null,
+    "description": "Resolve a player action and broadcast the response to connected players.\n\nAfter processing a player action (rolling dice, narrating outcome, updating state),\ncall this tool to push the response to the WebSocket broadcast queue.",
+    "inputSchema": {
+      "properties": {
+        "action_id": {
+          "description": "The action_id returned by party_pop_action",
+          "title": "Action Id",
+          "type": "string"
+        },
+        "dm_notes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "DM-only notes (not sent to players)",
+          "title": "Dm Notes"
+        },
+        "narrative": {
+          "description": "The DM's narrative response to the player's action",
+          "title": "Narrative",
+          "type": "string"
+        },
+        "private_messages": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "JSON object of player-specific private messages, e.g. {\"player\": \"secret\"}",
+          "title": "Private Messages"
+        }
+      },
+      "required": [
+        "action_id",
+        "narrative"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "party_thinking": {
+    "annotations": null,
+    "description": "Signal to players that the DM is preparing the next narrative.\n\nCall this immediately after party_pop_action to give players instant\nvisual feedback (animated dots + message) while you think and generate\nthe response. The indicator disappears automatically when you call\nparty_resolve_action.",
+    "inputSchema": {
+      "properties": {
+        "message": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Short message shown to players, e.g. 'The Dungeon Master consults the ancient scrolls…'",
+          "title": "Message"
+        }
+      },
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "player_action": {
+    "annotations": null,
+    "description": "Process a player action in the current Claudmaster session.",
+    "inputSchema": {
+      "properties": {
+        "action": {
+          "description": "The player's action as natural language text",
+          "title": "Action",
+          "type": "string"
+        },
+        "character_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional name of the character performing the action",
+          "title": "Character Name"
+        },
+        "context": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional additional context about the action",
+          "title": "Context"
+        },
+        "session_id": {
+          "description": "The active session ID to process the action in",
+          "title": "Session Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "session_id",
+        "action"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "remove_effect": {
+    "annotations": null,
+    "description": "Remove an active effect from a character by ID or name.\n\nIf an exact effect ID is provided, removes that specific instance.\nIf a name is provided, removes all effects with that name.",
+    "inputSchema": {
+      "properties": {
+        "character_name_or_id": {
+          "description": "Character name, ID, or player name.",
+          "title": "Character Name Or Id",
+          "type": "string"
+        },
+        "effect_id_or_name": {
+          "description": "Effect ID (exact match) or effect name (removes all with that name)",
+          "title": "Effect Id Or Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "character_name_or_id",
+        "effect_id_or_name"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "remove_item": {
+    "annotations": null,
+    "description": "Remove an item from a character's inventory.\n\nRemoves the specified quantity of an item. If quantity is greater than or equal\nto the item's current quantity, the item is removed entirely.",
+    "inputSchema": {
+      "properties": {
+        "character_name_or_id": {
+          "description": "Character name, ID, or player name",
+          "title": "Character Name Or Id",
+          "type": "string"
+        },
+        "item_name_or_id": {
+          "description": "Item name or ID to remove",
+          "title": "Item Name Or Id",
+          "type": "string"
+        },
+        "player_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Player ID for permission check (omit for single-player DM mode)",
+          "title": "Player Id"
+        },
+        "quantity": {
+          "default": 1,
+          "description": "Quantity to remove (default: all)",
+          "minimum": 1,
+          "title": "Quantity",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "character_name_or_id",
+        "item_name_or_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "remove_spell": {
+    "annotations": null,
+    "description": "Remove a spell from a character's spells known list.",
+    "inputSchema": {
+      "properties": {
+        "character_name_or_id": {
+          "description": "Character name, ID, or player name",
+          "title": "Character Name Or Id",
+          "type": "string"
+        },
+        "player_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Player ID for permission check (omit for single-player DM mode)",
+          "title": "Player Id"
+        },
+        "spell_name_or_id": {
+          "description": "Spell name or ID to remove",
+          "title": "Spell Name Or Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "character_name_or_id",
+        "spell_name_or_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "roll_dice": {
+    "annotations": null,
+    "description": "Roll dice with D&D notation. Pure: changes no game state.\n\nEvery term is rolled; a multi-term or keep-highest/lowest roll appends a\n'Breakdown:' line with each group's dice and subtotal. Advantage and\ndisadvantage need exactly one 1d20 term (other terms, e.g. '+1d4' for\nBless, are allowed); both together cancel. Any text that is not a valid\nterm (e.g. '2d6+banana') returns an error starting with '❌' and rolls\nnothing.",
+    "inputSchema": {
+      "properties": {
+        "advantage": {
+          "default": false,
+          "description": "Roll the expression's single 1d20 term twice and keep the higher",
+          "title": "Advantage",
+          "type": "boolean"
+        },
+        "dice_notation": {
+          "description": "Dice expression: sums/differences of NdM groups and flat numbers, e.g. '1d20+5', '2d6+1d4+4', '4d6kh3' (keep highest 3), '2d20kl1' (keep lowest 1), 'd8', 'd%'.",
+          "title": "Dice Notation",
+          "type": "string"
+        },
+        "disadvantage": {
+          "default": false,
+          "description": "Roll the expression's single 1d20 term twice and keep the lower",
+          "title": "Disadvantage",
+          "type": "boolean"
+        },
+        "label": {
+          "default": "",
+          "description": "Context label for the roll (e.g., 'Goblin Archer 2 attack vs Aldric')",
+          "title": "Label",
+          "type": "string"
+        }
+      },
+      "required": [
+        "dice_notation"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "scan_library": {
+    "annotations": null,
+    "description": "Scan the library folder for new PDF/Markdown files and index them.\n\nScans the library/pdfs/ directory for PDF and Markdown files,\nextracts table of contents from new or modified files,\nand saves indexes for quick searching.\n\nReturns a summary of files found and indexed.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "search_library": {
+    "annotations": null,
+    "description": "Search across all indexed library content.\n\nSearches TOC entries by title across all indexed PDF and Markdown sources.\nCan filter by content type (class, race, spell, etc.).\n\nArgs:\n    query: Search term (case-insensitive, searches in titles)\n    content_type: Filter by content type (default: all)\n    limit: Maximum results to return (default: 20)",
+    "inputSchema": {
+      "properties": {
+        "content_type": {
+          "default": "all",
+          "description": "Filter by content type",
+          "enum": [
+            "all",
+            "class",
+            "race",
+            "spell",
+            "monster",
+            "feat",
+            "item",
+            "background",
+            "subclass"
+          ],
+          "title": "Content Type",
+          "type": "string"
+        },
+        "limit": {
+          "default": 20,
+          "description": "Maximum results to return",
+          "maximum": 100,
+          "minimum": 1,
+          "title": "Limit",
+          "type": "integer"
+        },
+        "query": {
+          "default": "",
+          "description": "Search term (searches titles)",
+          "title": "Query",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "search_rules": {
+    "annotations": null,
+    "description": "Search for rules content across all loaded rulebooks.\n\nWorks without a campaign loaded (uses global rulebook manager).\nWhen a campaign is active, its rulebook manager takes priority.\n\nExamples:\n    - search_rules(query=\"fire\", category=\"spell\") - Find spells with 'fire' in name\n    - search_rules(class_filter=\"ranger\", category=\"spell\") - All ranger spells\n    - search_rules(query=\"cure\", class_filter=\"ranger\", category=\"spell\") - Ranger spells with 'cure' in name",
+    "inputSchema": {
+      "properties": {
+        "category": {
+          "anyOf": [
+            {
+              "enum": [
+                "all",
+                "class",
+                "subclass",
+                "race",
+                "subrace",
+                "spell",
+                "monster",
+                "feat",
+                "item",
+                "background",
+                "optionalfeature",
+                "condition",
+                "rule"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": "all",
+          "description": "Filter by category. Default: all",
+          "title": "Category"
+        },
+        "class_filter": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Filter spells by class (e.g., 'ranger', 'wizard'). Only applies to spell category.",
+          "title": "Class Filter"
+        },
+        "limit": {
+          "default": 20,
+          "description": "Max results",
+          "maximum": 50,
+          "minimum": 1,
+          "title": "Limit",
+          "type": "integer"
+        },
+        "query": {
+          "default": "",
+          "description": "Search term (name, partial match). Can be empty if class_filter is provided.",
+          "title": "Query",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "send_private_message": {
+    "annotations": null,
+    "description": "DM can send private messages to individual players via this tool.\n\nMessages are stored in the session coordinator and can be retrieved\nby the recipient player. Only visible to the specified recipient.",
+    "inputSchema": {
+      "properties": {
+        "content": {
+          "description": "Message content to send privately",
+          "title": "Content",
+          "type": "string"
+        },
+        "player_id": {
+          "description": "Recipient player ID",
+          "title": "Player Id",
+          "type": "string"
+        },
+        "sender_id": {
+          "default": "DM",
+          "description": "Sender player ID (typically the DM)",
+          "title": "Sender Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "player_id",
+        "content"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "short_rest": {
+    "annotations": null,
+    "description": "Perform a short rest for a character and save.\n\nRestores Warlock pact slots and refills class resources with recharge\n'short'; resources with recharge 'long' and a short_rest_regain value\nregain that many uses (e.g. 2024 Second Wind). Optionally spend hit dice\nto regain hit points: each die adds 1dX + CON modifier HP (minimum 1 per die).",
+    "inputSchema": {
+      "properties": {
+        "character_name_or_id": {
+          "description": "Character name, ID, or player name",
+          "title": "Character Name Or Id",
+          "type": "string"
+        },
+        "hit_dice_to_spend": {
+          "default": 0,
+          "description": "Number of hit dice to spend for healing",
+          "minimum": 0,
+          "title": "Hit Dice To Spend",
+          "type": "integer"
+        },
+        "player_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Player ID for permission check (omit for single-player DM mode)",
+          "title": "Player Id"
+        }
+      },
+      "required": [
+        "character_name_or_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "show_map": {
+    "annotations": null,
+    "description": "Render the current tactical map as ASCII art.\n\nShows positions of all combat participants on a grid. Returns\n'No tactical map active' if no positions are set or no combat is active.",
+    "inputSchema": {
+      "properties": {
+        "highlight_aoe": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional AoE description to highlight (e.g., 'sphere 20ft at 5,5')",
+          "title": "Highlight Aoe"
+        }
+      },
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "start_claudmaster_session": {
+    "annotations": null,
+    "description": "Start or resume a Claudmaster AI DM session.",
+    "inputSchema": {
+      "properties": {
+        "campaign_name": {
+          "description": "Name of the campaign to play",
+          "title": "Campaign Name",
+          "type": "string"
+        },
+        "module_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional D&D module to load",
+          "title": "Module Id"
+        },
+        "resume": {
+          "default": false,
+          "description": "Whether to resume an existing session",
+          "title": "Resume",
+          "type": "boolean"
+        },
+        "session_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Session ID to resume (required if resume=True)",
+          "title": "Session Id"
+        }
+      },
+      "required": [
+        "campaign_name"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "start_combat": {
+    "annotations": null,
+    "description": "Start a combat encounter and save it in the game state.\n\nSorts participants by initiative (highest first). Player characters are\ntracked on their character sheets. Every other participant becomes a\ncombatant with an ID, AC, HP and conditions: stats come from explicit\nkeys, else the NPC's stats dict, else the loaded rulebook's monster data\n(matched by monster_ref or name, ignoring a trailing number such as\n'Goblin 2'). Unknown participants get AC 10 / HP 1 and a warning; fix them\nwith update_combatant. Replaces any combatants from a previous fight.",
+    "inputSchema": {
+      "properties": {
+        "participants": {
+          "description": "Combat participants. Each item: {\"name\": str, \"initiative\": int} plus optional \"monster_ref\" (rulebook monster index or name, e.g. \"goblin\"), \"ac\", \"hp\" (max and current), \"hp_current\", \"conditions\" (list), \"notes\", \"count\" (spawn N copies named 'Name 1..N'). Names matching a player character use that character's sheet.",
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Participants",
+          "type": "array"
+        }
+      },
+      "required": [
+        "participants"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "start_party_mode": {
+    "annotations": null,
+    "description": "Start the Party Mode web server for multi-player sessions.\n\nLaunches a background HTTP server that allows multiple players to connect\nvia their phones or browsers. Automatically generates authentication tokens\nand QR codes for each player character in the current campaign.\n\nReturns connection URLs and QR code file paths for each player.",
+    "inputSchema": {
+      "properties": {
+        "port": {
+          "default": 8080,
+          "description": "Server port number",
+          "maximum": 65535,
+          "minimum": 1024,
+          "title": "Port",
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "stop_party_mode": {
+    "annotations": null,
+    "description": "Stop the Party Mode web server and disconnect all players.\n\nGracefully shuts down the server and closes all WebSocket connections.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "summarize_session": {
+    "annotations": null,
+    "description": "Generate structured SessionNote from a raw session transcription.\n\nThis tool accepts either raw transcription text or a path to a transcription file,\nthen generates a comprehensive structured summary including events, NPCs encountered,\nquest updates, and combat encounters. The tool leverages campaign context (characters,\nNPCs, locations, quests) to enrich the summary.\n\nFor large transcriptions (>200k characters ≈ 50k tokens), the tool automatically\nchunks the input into overlapping segments for processing.\n\nArgs:\n    transcription: Raw text or file path containing session transcription\n    session_number: Session number for this recording\n    detail_level: Amount of detail in the generated summary\n    speaker_map: Optional mapping of generic speaker labels to character names\n\nReturns:\n    Prompt for LLM to generate SessionNote",
+    "inputSchema": {
+      "properties": {
+        "detail_level": {
+          "default": "medium",
+          "description": "Detail level for the summary",
+          "enum": [
+            "brief",
+            "medium",
+            "detailed"
+          ],
+          "title": "Detail Level",
+          "type": "string"
+        },
+        "session_number": {
+          "description": "Session number",
+          "minimum": 1,
+          "title": "Session Number",
+          "type": "integer"
+        },
+        "speaker_map": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Speaker label to character mapping (e.g., {'Speaker 1': 'Gandalf'})",
+          "title": "Speaker Map"
+        },
+        "transcription": {
+          "description": "Raw transcription text or path to transcription file",
+          "title": "Transcription",
+          "type": "string"
+        }
+      },
+      "required": [
+        "transcription",
+        "session_number"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "sync_all_sheets": {
+    "annotations": null,
+    "description": "Regenerate all character sheets for the current campaign.\n\nUseful after bulk changes or to ensure all sheets are up to date.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "unequip_item": {
+    "annotations": null,
+    "description": "Unequip an item from an equipment slot back to inventory.\n\nMoves the equipped item back to the character's inventory and clears the slot.",
+    "inputSchema": {
+      "properties": {
+        "character_name_or_id": {
+          "description": "Character name, ID, or player name",
+          "title": "Character Name Or Id",
+          "type": "string"
+        },
+        "player_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Player ID for permission check (omit for single-player DM mode)",
+          "title": "Player Id"
+        },
+        "slot": {
+          "description": "Equipment slot: weapon_main, weapon_off, armor, or shield",
+          "title": "Slot",
+          "type": "string"
+        }
+      },
+      "required": [
+        "character_name_or_id",
+        "slot"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "unload_rulebook": {
+    "annotations": null,
+    "description": "Remove a rulebook from the current campaign.",
+    "inputSchema": {
+      "properties": {
+        "source_id": {
+          "description": "ID of the rulebook to unload (from list_rulebooks)",
+          "title": "Source Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "update_character": {
+    "annotations": null,
+    "description": "Update a character's properties and save.\n\nSupports scalar field updates, ability score changes, list add/remove\noperations (conditions, proficiencies, languages, features), subclass,\nspell-slot tables and class resources. List parameters accept JSON arrays\n(e.g. '[\"poisoned\",\"prone\"]') or comma-separated strings. Changing\ncharacter_level also recomputes spell slots and default class resources.\n\nValidation errors (bad JSON, invalid subclass) return a message starting\nwith '❌' and change nothing.",
+    "inputSchema": {
+      "properties": {
+        "add_conditions": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "JSON list of conditions to add, e.g. '[\"poisoned\",\"prone\"]'",
+          "title": "Add Conditions"
+        },
+        "add_features_and_traits": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "JSON list of features/traits to add",
+          "title": "Add Features And Traits"
+        },
+        "add_languages": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "JSON list of languages to add",
+          "title": "Add Languages"
+        },
+        "add_saving_throw_proficiencies": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "JSON list of saving throw proficiencies to add",
+          "title": "Add Saving Throw Proficiencies"
+        },
+        "add_skill_proficiencies": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "JSON list of skill proficiencies to add",
+          "title": "Add Skill Proficiencies"
+        },
+        "add_tool_proficiencies": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "JSON list of tool proficiencies to add",
+          "title": "Add Tool Proficiencies"
+        },
+        "alignment": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Character alignment",
+          "title": "Alignment"
+        },
+        "armor_class": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Armor class",
+          "title": "Armor Class"
+        },
+        "background": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Character background",
+          "title": "Background"
+        },
+        "bio": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The character's backstory, personality, and motivations.",
+          "title": "Bio"
+        },
+        "character_level": {
+          "anyOf": [
+            {
+              "maximum": 20,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Set the primary class level directly (e.g. to downgrade to level 1). Recalculates proficiency bonus automatically.",
+          "title": "Character Level"
+        },
+        "charisma": {
+          "anyOf": [
+            {
+              "maximum": 30,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Charisma score",
+          "title": "Charisma"
+        },
+        "constitution": {
+          "anyOf": [
+            {
+              "maximum": 30,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Constitution score",
+          "title": "Constitution"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A brief description of the character's appearance and demeanor.",
+          "title": "Description"
+        },
+        "dexterity": {
+          "anyOf": [
+            {
+              "maximum": 30,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Dexterity score",
+          "title": "Dexterity"
+        },
+        "experience_points": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Experience points",
+          "title": "Experience Points"
+        },
+        "hit_dice_remaining": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Remaining hit dice, e.g. '1d8' or '3d10'. Use after a level change or manual rest.",
+          "title": "Hit Dice Remaining"
+        },
+        "hit_points_current": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Current hit points",
+          "title": "Hit Points Current"
+        },
+        "hit_points_max": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Maximum hit points",
+          "title": "Hit Points Max"
+        },
+        "inspiration": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Inspiration status",
+          "title": "Inspiration"
+        },
+        "intelligence": {
+          "anyOf": [
+            {
+              "maximum": 30,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Intelligence score",
+          "title": "Intelligence"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "New character name. If you change this, you must use the character's ID to identify them.",
+          "title": "Name"
+        },
+        "name_or_id": {
+          "description": "Character name, ID, or player name.",
+          "title": "Name Or Id",
+          "type": "string"
+        },
+        "notes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Additional notes about the character",
+          "title": "Notes"
+        },
+        "player_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Player ID for permission check (omit for single-player DM mode)",
+          "title": "Player Id"
+        },
+        "player_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The name of the player in control of this character",
+          "title": "Player Name"
+        },
+        "remove_conditions": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "JSON list of conditions to remove",
+          "title": "Remove Conditions"
+        },
+        "remove_features_and_traits": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "JSON list of features/traits to remove",
+          "title": "Remove Features And Traits"
+        },
+        "remove_languages": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "JSON list of languages to remove",
+          "title": "Remove Languages"
+        },
+        "remove_saving_throw_proficiencies": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "JSON list of saving throw proficiencies to remove",
+          "title": "Remove Saving Throw Proficiencies"
+        },
+        "remove_skill_proficiencies": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "JSON list of skill proficiencies to remove",
+          "title": "Remove Skill Proficiencies"
+        },
+        "remove_tool_proficiencies": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "JSON list of tool proficiencies to remove",
+          "title": "Remove Tool Proficiencies"
+        },
+        "set_resources": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "JSON object to create/update/delete class resources, e.g. '{\"Action Surge\": {\"max\": 1, \"current\": 0, \"recharge\": \"short\"}, \"Bite\": {\"max\": 3, \"recharge\": \"long\"}, \"Old Pool\": null}'. Fields merge into an existing resource; a new one needs \"max\" (current defaults to max); recharge is \"short\", \"long\" or \"none\"; null deletes.",
+          "title": "Set Resources"
+        },
+        "speed": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Movement speed in feet",
+          "title": "Speed"
+        },
+        "spell_slots": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "JSON object of MAX spell slots by spell level, replacing the current table, e.g. '{\"1\": 4, \"2\": 3}'. Used counts above the new max are clamped. Use '{}' to clear.",
+          "title": "Spell Slots"
+        },
+        "spell_slots_used": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "JSON object of USED spell slots by level, e.g. '{\"1\": 2}'. Levels not listed are unchanged.",
+          "title": "Spell Slots Used"
+        },
+        "strength": {
+          "anyOf": [
+            {
+              "maximum": 30,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Strength score",
+          "title": "Strength"
+        },
+        "subclass": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Set the subclass (e.g. 'Battle Master', 'Echo Knight'). Validated against the rulebook's list for the class; free text with a warning if the rulebook lists none. Adds subclass features up to the current class level when the rulebook has them.",
+          "title": "Subclass"
+        },
+        "subclass_class": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Which class the subclass belongs to, for multiclass characters. Default: primary class.",
+          "title": "Subclass Class"
+        },
+        "temporary_hit_points": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Temporary hit points",
+          "title": "Temporary Hit Points"
+        },
+        "wisdom": {
+          "anyOf": [
+            {
+              "maximum": 30,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Wisdom score",
+          "title": "Wisdom"
+        }
+      },
+      "required": [
+        "name_or_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "update_combatant": {
+    "annotations": null,
+    "description": "Adjust a combatant's HP, AC, temp HP or conditions during combat and save.\n\nWorks on combatants created by start_combat (monsters, ad-hoc NPCs) and\non player characters by name (HP/temp HP/conditions go to the character\nsheet). Returns the new HP line, or a '❌' message if no such combatant\nor character exists.",
+    "inputSchema": {
+      "properties": {
+        "ac": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Set armor class (combatants only)",
+          "title": "Ac"
+        },
+        "add_conditions": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "JSON list or comma-separated conditions to add, e.g. '[\"prone\"]'",
+          "title": "Add Conditions"
+        },
+        "hp_change": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Change to current HP: negative = damage (temp HP absorbs first), positive = healing (capped at max)",
+          "title": "Hp Change"
+        },
+        "hp_current": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Set current HP directly",
+          "title": "Hp Current"
+        },
+        "hp_max": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Set maximum HP (combatants only)",
+          "title": "Hp Max"
+        },
+        "name_or_id": {
+          "description": "Combatant ID or name from start_combat (a player character's name also works)",
+          "title": "Name Or Id",
+          "type": "string"
+        },
+        "notes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Replace the combatant's notes (combatants only)",
+          "title": "Notes"
+        },
+        "remove_conditions": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "JSON list or comma-separated conditions to remove",
+          "title": "Remove Conditions"
+        },
+        "temp_hp": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Set temporary HP",
+          "title": "Temp Hp"
+        }
+      },
+      "required": [
+        "name_or_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "update_game_state": {
+    "annotations": null,
+    "description": "Update the current game state.",
+    "inputSchema": {
+      "properties": {
+        "current_date_in_game": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Current in-game date",
+          "title": "Current Date In Game"
+        },
+        "current_location": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Current party location",
+          "title": "Current Location"
+        },
+        "current_session": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Current session number",
+          "title": "Current Session"
+        },
+        "in_combat": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether party is in combat",
+          "title": "In Combat"
+        },
+        "notes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Current situation notes",
+          "title": "Notes"
+        },
+        "party_funds": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Party treasure/funds",
+          "title": "Party Funds"
+        },
+        "party_level": {
+          "anyOf": [
+            {
+              "maximum": 20,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Average party level",
+          "title": "Party Level"
+        }
+      },
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "update_npc": {
+    "annotations": null,
+    "description": "Partially update an NPC and save. Only the parameters you pass change.\n\nReturns a list of changed fields, or a message starting with '❌' (nothing\nchanged) if the NPC does not exist or a JSON parameter is invalid.",
+    "inputSchema": {
+      "properties": {
+        "append_notes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Append a line to the existing notes",
+          "title": "Append Notes"
+        },
+        "attitude": {
+          "anyOf": [
+            {
+              "enum": [
+                "friendly",
+                "neutral",
+                "hostile",
+                "unknown"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Attitude towards the party",
+          "title": "Attitude"
+        },
+        "bio": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Replace the private bio (secrets, motivations)",
+          "title": "Bio"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Replace the public description",
+          "title": "Description"
+        },
+        "location": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Replace current location",
+          "title": "Location"
+        },
+        "name_or_id": {
+          "description": "NPC name (case-insensitive) or ID",
+          "title": "Name Or Id",
+          "type": "string"
+        },
+        "notes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Replace notes entirely",
+          "title": "Notes"
+        },
+        "occupation": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Replace occupation",
+          "title": "Occupation"
+        },
+        "race": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Replace race",
+          "title": "Race"
+        },
+        "relationships": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "JSON object merged into relationships {name: relationship}, e.g. '{\"Aldric\": \"owes a debt\"}'. A null value deletes that entry.",
+          "title": "Relationships"
+        },
+        "stats": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "JSON object merged into the stats dict, e.g. '{\"AC\": 15, \"HP\": 27, \"CR\": \"1\"}'. A null value deletes that key. AC/HP/CR are used by start_combat.",
+          "title": "Stats"
+        }
+      },
+      "required": [
+        "name_or_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "update_quest": {
+    "annotations": null,
+    "description": "Update quest status or complete objectives.",
+    "inputSchema": {
+      "properties": {
+        "completed_objective": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Objective to mark as completed",
+          "title": "Completed Objective"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "enum": [
+                "active",
+                "completed",
+                "failed",
+                "on_hold"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "New quest status",
+          "title": "Status"
+        },
+        "title": {
+          "description": "Quest title",
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "use_resource": {
+    "annotations": null,
+    "description": "Spend uses of a limited class resource and save.\n\nFails with a '❌' message and changes nothing if the resource does not\nexist or has fewer than `amount` left. Resources recharge on short_rest /\nlong_rest according to their recharge type. Create, edit or delete\nresources with update_character set_resources.",
+    "inputSchema": {
+      "properties": {
+        "amount": {
+          "default": 1,
+          "description": "Uses/points to spend (e.g. 5 HP from Lay on Hands). Negative restores, capped at max.",
+          "maximum": 1000,
+          "minimum": -1000,
+          "title": "Amount",
+          "type": "integer"
+        },
+        "character_name_or_id": {
+          "description": "Character name, ID, or player name",
+          "title": "Character Name Or Id",
+          "type": "string"
+        },
+        "player_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Player ID for permission check (omit for single-player DM mode)",
+          "title": "Player Id"
+        },
+        "resource": {
+          "description": "Resource name, case-insensitive (e.g. 'Action Surge', 'Ki', 'Lay on Hands')",
+          "title": "Resource",
+          "type": "string"
+        }
+      },
+      "required": [
+        "character_name_or_id",
+        "resource"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "use_spell_slot": {
+    "annotations": null,
+    "description": "Expend one spell slot of slot_level and save.\n\nUses a regular slot of exactly slot_level if one is left; otherwise a\nWarlock Pact Magic slot of that level or higher (the spell is cast at the\npact slot's level). Returns remaining counts, or a '❌' message (nothing\nchanged) when no suitable slot is available. Slots return on long_rest\n(pact slots also on short_rest).",
+    "inputSchema": {
+      "properties": {
+        "character_name_or_id": {
+          "description": "Character name, ID, or player name",
+          "title": "Character Name Or Id",
+          "type": "string"
+        },
+        "player_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Player ID for permission check (omit for single-player DM mode)",
+          "title": "Player Id"
+        },
+        "slot_level": {
+          "description": "Spell slot level to use (1-9)",
+          "maximum": 9,
+          "minimum": 1,
+          "title": "Slot Level",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "character_name_or_id",
+        "slot_level"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "validate_character_rules": {
+    "annotations": null,
+    "description": "Validate a character against loaded rulebooks.",
+    "inputSchema": {
+      "properties": {
+        "name_or_id": {
+          "description": "Character name or ID to validate",
+          "title": "Name Or Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name_or_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  },
+  "validate_pack": {
+    "annotations": null,
+    "description": "Validate a compendium pack file without importing it.\n\nChecks the pack for schema conformance, version compatibility, entity\ncount consistency, and required fields. Returns a detailed validation report.",
+    "inputSchema": {
+      "properties": {
+        "file_path": {
+          "description": "Path to the pack JSON file to validate",
+          "title": "File Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "file_path"
+      ],
+      "type": "object"
+    },
+    "outputSchema": null
+  }
+}
