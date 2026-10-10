@@ -3,6 +3,8 @@ Storage layer for the D&D MCP Server.
 Handles persistence of campaign data to JSON files.
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
 import shutil
@@ -17,9 +19,13 @@ from .models import (
     Campaign, Character, NPC, Location, Quest, CombatEncounter,
     SessionNote, GameState, AdventureEvent
 )
+from typing import TYPE_CHECKING
+
 from .rulebooks.manager import RulebookManager
-from .library.manager import LibraryManager
 from .library.bindings import LibraryBindings
+
+if TYPE_CHECKING:
+    from .library.manager import LibraryManager
 from .consistency.discovery import DiscoveryTracker
 
 logger = logging.getLogger("dm20-protocol")
@@ -181,6 +187,7 @@ class DnDStorage:
             LibraryManager instance for the global library
         """
         if self._library_manager is None:
+            from .library.manager import LibraryManager  # lazy: pulls in PyMuPDF
             self._library_manager = LibraryManager(self.library_dir)
             self._library_manager.ensure_directories()
             logger.debug(f"📚 Initialized LibraryManager at {self.library_dir}")

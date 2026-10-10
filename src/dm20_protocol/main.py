@@ -4854,7 +4854,7 @@ def _configure_claudmaster_impl(
 @mcp.tool
 def configure_claudmaster(
     llm_model: Annotated[str | None, Field(description="LLM model identifier (e.g., 'claude-opus-5-5')")] = None,
-    temperature: Annotated[float | None, Field(description="LLM temperature (0.0-2.0)")] = None,
+    temperature: Annotated[float | None, Field(description="Deprecated and ignored: current Claude models reject sampling parameters. Use effort instead.")] = None,
     max_tokens: Annotated[int | None, Field(description="Maximum tokens in LLM response (256-200000)")] = None,
     narrative_style: Annotated[str | None, Field(description="Narrative style: descriptive, concise, dramatic, cinematic, etc.")] = None,
     dialogue_style: Annotated[str | None, Field(description="Dialogue style: natural, theatrical, formal, casual, etc.")] = None,
@@ -4987,7 +4987,6 @@ def _format_claudmaster_config(config, header: str = "Claudmaster Configuration"
         f"  Narrator Model: {config.narrator_model}",
         f"  Arbiter Model: {config.arbiter_model}",
         f"  Effort (main/narrator/arbiter): {config.effort or 'none'}/{config.narrator_effort or 'none'}/{config.arbiter_effort or 'none'}",
-        f"  Temperature (main/narrator/arbiter): {config.temperature}/{config.narrator_temperature}/{config.arbiter_temperature}",
         f"  Max Tokens (main/narrator/arbiter): {config.max_tokens}/{config.narrator_max_tokens}/{config.arbiter_max_tokens}",
         "",
         "**Narrative Settings:**",

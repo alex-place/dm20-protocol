@@ -11,11 +11,32 @@ The library system:
 - Manages per-campaign bindings to enable/disable library content
 """
 
-from .manager import LibraryManager
-from .models import LibrarySource, IndexEntry, TOCEntry, ContentSummary, ContentType
-from .extractors import TOCExtractor, ContentExtractor, ExtractedContent
-from .bindings import SourceBinding, LibraryBindings
-from .search import LibrarySearch, SearchResult
+from importlib import import_module
+
+# Exports resolve lazily: the extractors pull in PyMuPDF, which takes seconds to
+# import, and most callers (storage, checkpoint hooks) only need bindings.
+_EXPORTS = {
+    "LibraryManager": ".manager",
+    "LibrarySource": ".models",
+    "IndexEntry": ".models",
+    "TOCEntry": ".models",
+    "ContentSummary": ".models",
+    "ContentType": ".models",
+    "TOCExtractor": ".extractors",
+    "ContentExtractor": ".extractors",
+    "ExtractedContent": ".extractors",
+    "SourceBinding": ".bindings",
+    "LibraryBindings": ".bindings",
+    "LibrarySearch": ".search",
+    "SearchResult": ".search",
+}
+
+
+def __getattr__(name: str):
+    if name in _EXPORTS:
+        return getattr(import_module(_EXPORTS[name], __name__), name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 __all__ = [
     "LibraryManager",
