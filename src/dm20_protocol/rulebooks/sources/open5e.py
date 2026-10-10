@@ -389,9 +389,17 @@ class Open5eSource(RulebookSourceBase):
         # Build spellcasting info if applicable
         spellcasting = None
         if data.get("spellcasting_ability"):
+            from ..spell_progression import first_casting_level, standard_slot_table
+            from .srd import CASTER_TYPES
+
+            caster = CASTER_TYPES.get(data["slug"], "full")
+            slots = standard_slot_table(caster)
             spellcasting = SpellcastingInfo(
-                level=1,
+                level=first_casting_level(slots, 1),
                 spellcasting_ability=data["spellcasting_ability"].upper(),
+                caster_type=caster,  # type: ignore[arg-type]
+                spell_slots=slots,
+                pact_magic=caster == "pact",
             )
 
         return ClassDefinition(
