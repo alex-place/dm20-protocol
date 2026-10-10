@@ -118,7 +118,7 @@ def mock_config():
     """Create a default ClaudmasterConfig for testing."""
     return ClaudmasterConfig(
         llm_provider="anthropic",
-        llm_model="claude-sonnet-4-5-20250929",
+        llm_model="claude-sonnet-5-5",
         max_tokens=4096,
         temperature=0.7
     )

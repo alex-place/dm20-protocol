@@ -277,7 +277,7 @@ class TestClaudmasterConfigIntegration:
         """Test improvisation level alongside other config fields."""
         config = ClaudmasterConfig(
             llm_provider="anthropic",
-            llm_model="claude-sonnet-4-5-20250929",
+            llm_model="claude-sonnet-5-5",
             improvisation_level=ImprovisationLevel.LOW,
             allow_level_change_mid_session=True,
             narrative_style="cinematic",
