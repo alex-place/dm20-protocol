@@ -7,6 +7,7 @@ that integrate seamlessly with official SRD content.
 
 import json
 import logging
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterator
@@ -25,6 +26,13 @@ from ..models import (
     BackgroundDefinition,
     ItemDefinition,
     RulebookSource as RulebookSourceType,
+)
+from ..spell_progression import (
+    caster_type_for,
+    first_casting_level,
+    normalize_progression,
+    normalize_slot_table,
+    standard_slot_table,
 )
 from .base import RulebookSourceBase, SearchResult, ContentCounts
 
@@ -238,16 +246,133 @@ class CustomSource(RulebookSourceBase):
         data["source"] = self.source_id
         return data
 
+    # -------------------------------------------------------------------------
+    # Friendly class / subclass format (features + spellcasting progressions)
+    # -------------------------------------------------------------------------
+
+    @staticmethod
+    def _slug(value: str) -> str:
+        return re.sub(r"[^a-z0-9]+", "-", str(value).lower()).strip("-")
+
+    @staticmethod
+    def _features_by_level(raw: Any) -> dict[int, list[tuple[str, str]]]:
+        """
+        Accept either ``{"3": [{"name", "desc"}, "Name", ...]}`` or
+        ``[{"name", "level", "desc"}, ...]``. ``desc`` may be a string or a
+        list of paragraphs.
+        """
+        out: dict[int, list[tuple[str, str]]] = {}
+
+        def add(level: Any, feat: Any) -> None:
+            try:
+                lvl = int(level)
+            except (TypeError, ValueError):
+                return
+            if isinstance(feat, str):
+                out.setdefault(lvl, []).append((feat, ""))
+            elif isinstance(feat, dict) and feat.get("name"):
+                desc = feat.get("desc", feat.get("description", ""))
+                if isinstance(desc, list):
+                    desc = "\n".join(str(d) for d in desc)
+                out.setdefault(lvl, []).append((str(feat["name"]), str(desc or "")))
+
+        if isinstance(raw, dict):
+            for level, feats in raw.items():
+                for feat in feats if isinstance(feats, list) else [feats]:
+                    add(level, feat)
+        elif isinstance(raw, list):
+            for feat in raw:
+                if isinstance(feat, dict):
+                    add(feat.get("level"), feat)
+        return out
+
+    @staticmethod
+    def _spellcasting(raw: Any) -> dict[str, Any] | None:
+        """
+        Normalise a spellcasting block. Accepts the model shape plus:
+
+        - ``ability`` (alias of ``spellcasting_ability``)
+        - ``progression``: full | half | third | pact | artificer | 1/2 | 1/3
+          (fills ``spell_slots`` and ``caster_type`` from the standard tables)
+        - ``spell_slots`` as ``{level: [1st, 2nd, ...]}`` or
+          ``{level: {slot_level: count}}``
+        """
+        if not isinstance(raw, dict):
+            return None
+        sc = dict(raw)
+        if "ability" in sc and "spellcasting_ability" not in sc:
+            sc["spellcasting_ability"] = sc.pop("ability")
+        sc["spellcasting_ability"] = str(sc.get("spellcasting_ability", "INT")).upper()[:3]
+        progression = sc.pop("progression", None) or sc.get("caster_type")
+        slots = normalize_slot_table(sc.get("spell_slots")) if sc.get("spell_slots") else {}
+        if not slots and progression:
+            slots = standard_slot_table(progression)
+        if slots:
+            sc["spell_slots"] = slots
+        if progression:
+            sc["caster_type"] = caster_type_for(progression)
+        if normalize_progression(progression) == "pact":
+            sc.setdefault("pact_magic", True)
+        sc.setdefault("level", first_casting_level(slots, 1))
+        return sc
+
+    def _normalize_class_like(self, data: dict, levels_key: str) -> dict:
+        data = dict(data)
+        feats = self._features_by_level(data.pop("features", None))
+        levels: dict[Any, Any] = dict(data.get(levels_key) or {})
+        for lvl, entries in feats.items():
+            info = dict(levels.pop(lvl, None) or levels.pop(str(lvl), None) or {})
+            info.setdefault("level", lvl)
+            info["features"] = list(info.get("features", []))
+            info["feature_details"] = dict(info.get("feature_details", {}))
+            for name, desc in entries:
+                if name not in info["features"]:
+                    info["features"].append(name)
+                if desc:
+                    info["feature_details"][name] = desc
+            levels[lvl] = info
+        fixed: dict[int, Any] = {}
+        for key, info in levels.items():
+            try:
+                lvl = int(key)
+            except (TypeError, ValueError):
+                continue
+            if isinstance(info, dict):
+                info = dict(info)
+                info.setdefault("level", lvl)
+                info.setdefault("proficiency_bonus", (lvl - 1) // 4 + 2)
+            fixed[lvl] = info
+        if fixed:
+            data[levels_key] = fixed
+        if data.get("spellcasting") is not None:
+            data["spellcasting"] = self._spellcasting(data["spellcasting"])
+        return data
+
     def _parse_class(self, data: dict) -> ClassDefinition:
-        """Parse a class definition."""
+        """Parse a class definition (model shape or friendly ``features`` shape)."""
         data = self._ensure_index(data)
         data = self._ensure_source(data)
+        data = self._normalize_class_like(data, "class_levels")
         return ClassDefinition.model_validate(data)
 
     def _parse_subclass(self, data: dict) -> SubclassDefinition:
-        """Parse a subclass definition."""
+        """
+        Parse a subclass definition.
+
+        Besides the model shape, accepts ``class`` (alias of ``parent_class``,
+        a class index or name), ``features`` keyed by level, and a
+        ``spellcasting`` block with a ``progression``. Example::
+
+            {"name": "Echo Knight", "class": "fighter",
+             "features": {"3": [{"name": "Manifest Echo", "desc": "..."}]}}
+        """
         data = self._ensure_index(data)
         data = self._ensure_source(data)
+        if "parent_class" not in data and data.get("class"):
+            data["parent_class"] = self._slug(data.pop("class"))
+        elif data.get("parent_class"):
+            data["parent_class"] = self._slug(data["parent_class"])
+        data = self._normalize_class_like(data, "subclass_levels")
         return SubclassDefinition.model_validate(data)
 
     def _parse_race(self, data: dict) -> RaceDefinition:

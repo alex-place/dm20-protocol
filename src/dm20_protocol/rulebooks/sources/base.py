@@ -20,6 +20,8 @@ from ..models import (
     FeatDefinition,
     BackgroundDefinition,
     ItemDefinition,
+    OptionalFeatureDefinition,
+    RuleDefinition,
     RulebookSource as RulebookSourceType,
 )
 
@@ -29,7 +31,10 @@ class SearchResult:
     """Result from a search query."""
     index: str
     name: str
-    category: Literal["class", "subclass", "race", "subrace", "spell", "monster", "feat", "background", "item"]
+    category: Literal[
+        "class", "subclass", "race", "subrace", "spell", "monster", "feat",
+        "background", "item", "optionalfeature", "rule",
+    ]
     source: str
     summary: str | None = None
 
@@ -56,6 +61,8 @@ class ContentCounts:
     feats: int = 0
     backgrounds: int = 0
     items: int = 0
+    optional_features: int = 0
+    rules: int = 0
 
     def to_dict(self) -> dict[str, int]:
         """Convert to dictionary."""
@@ -69,6 +76,8 @@ class ContentCounts:
             "feats": self.feats,
             "backgrounds": self.backgrounds,
             "items": self.items,
+            "optional_features": self.optional_features,
+            "rules": self.rules,
         }
 
     def __str__(self) -> str:
@@ -286,6 +295,18 @@ class RulebookSourceBase(ABC):
     # =========================================================================
     # Optional Methods - Can be overridden by subclasses
     # =========================================================================
+
+    def get_optional_feature(self, index: str) -> "OptionalFeatureDefinition | None":
+        """Get an optional class feature (fighting style, invocation, ...)."""
+        return None
+
+    def get_rule(self, index: str) -> "RuleDefinition | None":
+        """Get a condition / disease / action / variant rule by index."""
+        return None
+
+    def iter_subclasses(self) -> Iterator[SubclassDefinition]:
+        """Iterate all subclasses defined by this source."""
+        return iter(getattr(self, "_subclasses", {}).values())
 
     def stats_summary(self) -> str:
         """

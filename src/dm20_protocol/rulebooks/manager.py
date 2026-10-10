@@ -26,8 +26,11 @@ from .models import (
     FeatDefinition,
     BackgroundDefinition,
     ItemDefinition,
+    OptionalFeatureDefinition,
+    RuleDefinition,
     RulebookSource as RulebookSourceEnum,
 )
+from .spell_progression import first_casting_level, standard_slot_table
 from .sources.base import RulebookSourceBase, SearchResult, ContentCounts
 
 if TYPE_CHECKING:
@@ -50,6 +53,7 @@ class SourceConfig:
     loaded_at: str  # ISO timestamp
     version: str | None = None  # For SRD sources
     path: str | None = None  # For custom sources
+    options: dict | None = None  # Source constructor options (5etools filters/edition)
 
     def to_dict(self) -> dict:
         """Convert to dictionary for serialization."""
@@ -62,6 +66,8 @@ class SourceConfig:
             result["version"] = self.version
         if self.path:
             result["path"] = self.path
+        if self.options:
+            result["options"] = self.options
         return result
 
     @classmethod
@@ -73,6 +79,7 @@ class SourceConfig:
             loaded_at=data["loaded_at"],
             version=data.get("version"),
             path=data.get("path"),
+            options=data.get("options"),
         )
 
 
@@ -235,7 +242,14 @@ class RulebookManager:
         """
         Get a class definition by index.
 
-        Searches sources in reverse priority order (last wins).
+        Searches sources in reverse priority order (last wins). The returned
+        definition is enriched across sources:
+
+        * ``subclasses`` also lists subclasses that *other* loaded sources
+          attach to this class (e.g. an Echo Knight from a custom pack on top
+          of the SRD Fighter).
+        * ``spellcasting.spell_slots`` is filled from the standard progression
+          for its ``caster_type`` when the source provided no table.
 
         Args:
             index: The class index (e.g., "wizard")
@@ -244,17 +258,83 @@ class RulebookManager:
             ClassDefinition if found, None otherwise
         """
         with self._lock:
+            found = None
             for source_id in reversed(self._priority):
                 result = self._sources[source_id].get_class(index)
+                if result:
+                    found = result
+                    break
+            if found is None:
+                return None
+            return self._enrich_class(found)
+
+    def _enrich_class(self, class_def: ClassDefinition) -> ClassDefinition:
+        extra: list[str] = []
+        for source in self._sources.values():
+            try:
+                subs = list(source.iter_subclasses())
+            except Exception:  # pragma: no cover - defensive for exotic sources
+                continue
+            for sub in subs:
+                if sub.parent_class != class_def.index:
+                    continue
+                slug = sub.short_name or sub.index
+                slug = slug.lower().replace(" ", "-")
+                if sub.index.startswith(f"{class_def.index}-"):
+                    slug = sub.index[len(class_def.index) + 1:]
+                if slug not in class_def.subclasses and slug not in extra:
+                    extra.append(slug)
+        update: dict = {}
+        if extra:
+            update["subclasses"] = list(class_def.subclasses) + extra
+        sc = class_def.spellcasting
+        if sc is not None and not sc.spell_slots:
+            table = standard_slot_table(sc.caster_type)
+            if table:
+                update["spellcasting"] = sc.model_copy(update={
+                    "spell_slots": table,
+                    "pact_magic": sc.pact_magic or sc.caster_type == "pact",
+                    "level": sc.level if sc.level != 1 else first_casting_level(table, 1),
+                })
+        return class_def.model_copy(update=update) if update else class_def
+
+    def get_subclass(self, index: str) -> SubclassDefinition | None:
+        """Get a subclass definition by index (also accepts ``{class}-{subclass}``)."""
+        with self._lock:
+            for source_id in reversed(self._priority):
+                result = self._sources[source_id].get_subclass(index)
                 if result:
                     return result
         return None
 
-    def get_subclass(self, index: str) -> SubclassDefinition | None:
-        """Get a subclass definition by index."""
+    def get_subclasses_for(self, class_index: str) -> list[SubclassDefinition]:
+        """All subclasses (from every source) available to a class."""
+        class_def = self.get_class(class_index)
+        if not class_def:
+            return []
+        out: list[SubclassDefinition] = []
+        seen: set[str] = set()
+        for slug in class_def.subclasses:
+            sub = self.get_subclass(f"{class_def.index}-{slug}") or self.get_subclass(slug)
+            if sub and sub.parent_class in ("", class_def.index) and sub.index not in seen:
+                seen.add(sub.index)
+                out.append(sub)
+        return out
+
+    def get_optional_feature(self, index: str) -> OptionalFeatureDefinition | None:
+        """Get an optional feature (fighting style, invocation, maneuver, ...)."""
         with self._lock:
             for source_id in reversed(self._priority):
-                result = self._sources[source_id].get_subclass(index)
+                result = self._sources[source_id].get_optional_feature(index)
+                if result:
+                    return result
+        return None
+
+    def get_rule(self, index: str) -> RuleDefinition | None:
+        """Get a condition / disease / action / variant rule."""
+        with self._lock:
+            for source_id in reversed(self._priority):
+                result = self._sources[source_id].get_rule(index)
                 if result:
                     return result
         return None
@@ -395,6 +475,8 @@ class RulebookManager:
                 total.feats += counts.feats
                 total.backgrounds += counts.backgrounds
                 total.items += counts.items
+                total.optional_features += getattr(counts, "optional_features", 0)
+                total.rules += getattr(counts, "rules", 0)
             return total
 
     # =========================================================================
@@ -471,10 +553,14 @@ class RulebookManager:
                 loaded_at=loaded_at,
             )
         elif source.source_type == RulebookSourceEnum.FIVETOOLS:
+            options_fn = getattr(source, "options", None)
             return SourceConfig(
                 id=source.source_id,
                 type="5etools",
                 loaded_at=loaded_at,
+                options=(lambda o: o if isinstance(o, dict) else None)(
+                    options_fn() if callable(options_fn) else None
+                ),
             )
         else:
             # Custom source
@@ -565,7 +651,12 @@ class RulebookManager:
             from .sources.fivetools import FiveToolsSource
 
             cache_dir = self._manifest_dir / "cache" if self._manifest_dir else None
-            return FiveToolsSource(cache_dir=cache_dir)
+            options = dict(config.options or {})
+            allowed = {"sources", "exclude_sources", "edition", "expand_magic_variants"}
+            return FiveToolsSource(
+                cache_dir=cache_dir,
+                **{k: v for k, v in options.items() if k in allowed},
+            )
 
         elif config.type == "custom":
             from .sources.custom import CustomSource

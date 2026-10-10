@@ -3669,8 +3669,28 @@ async def load_rulebook(
         str | None,
         Field(description="Path to custom rulebook file (JSON). Required for custom sources.")
     ] = None,
+    sources: Annotated[
+        list[str] | None,
+        Field(description="5etools only: allowlist of source abbreviations, e.g. ['XPHB','XMM','EGW']. Default: all.")
+    ] = None,
+    exclude_sources: Annotated[
+        list[str] | None,
+        Field(description="5etools only: source abbreviations to skip, e.g. ['UA']")
+    ] = None,
+    edition: Annotated[
+        Literal["2014", "2024"] | None,
+        Field(description="5etools only: preferred edition when an entry has a 2014 and a 2024 version. Default: 2024.")
+    ] = None,
+    refresh: Annotated[
+        bool,
+        Field(description="5etools only: revalidate the download cache (ETag) before loading")
+    ] = False,
 ) -> str:
-    """Load a rulebook into the current campaign."""
+    """Load a rulebook into the current campaign.
+
+    SRD loads are tolerant per category: missing endpoints are skipped and listed
+    in the result. 5etools loads can be filtered by source and edition.
+    """
     if not storage._current_campaign:
         return "❌ No campaign loaded. Use `load_campaign` first."
 
@@ -3684,7 +3704,10 @@ async def load_rulebook(
         srd_source = SRDSource(version=version or "2014", cache_dir=storage.rulebook_cache_dir)
         await storage.rulebook_manager.load_source(srd_source)
         counts = srd_source.content_counts()
-        return f"✅ Loaded SRD {version} rulebook\n📚 {counts.classes} classes, {counts.races} races, {counts.spells} spells, {counts.monsters} monsters"
+        result = f"✅ Loaded SRD {version} rulebook\n📚 {counts.classes} classes, {counts.races} races, {counts.spells} spells, {counts.monsters} monsters"
+        if getattr(srd_source, "load_report", None):
+            result += f"\n🧾 {srd_source.report_text()}"
+        return result
 
     elif source == "open5e":
         from .rulebooks.sources.open5e import Open5eSource
@@ -3695,10 +3718,26 @@ async def load_rulebook(
 
     elif source == "5etools":
         from .rulebooks.sources.fivetools import FiveToolsSource
-        fivetools_source = FiveToolsSource(cache_dir=storage.rulebook_cache_dir)
+        fivetools_source = FiveToolsSource(
+            cache_dir=storage.rulebook_cache_dir,
+            sources=sources,
+            exclude_sources=exclude_sources,
+            edition=edition or "2024",
+            refresh=refresh,
+        )
         await storage.rulebook_manager.load_source(fivetools_source)
         counts = fivetools_source.content_counts()
-        return f"✅ Loaded 5etools rulebook\n📚 {counts.classes} classes, {counts.races} races, {counts.spells} spells, {counts.monsters} monsters"
+        filters = f"edition {fivetools_source.edition}"
+        if fivetools_source.allowed_sources:
+            filters += f", sources {', '.join(sorted(fivetools_source.allowed_sources))}"
+        if fivetools_source.excluded_sources:
+            filters += f", excluding {', '.join(sorted(fivetools_source.excluded_sources))}"
+        return (
+            f"✅ Loaded 5etools rulebook ({filters})\n"
+            f"📚 {counts.classes} classes, {counts.subclasses} subclasses, {counts.races} races, "
+            f"{counts.spells} spells, {counts.monsters} monsters, {counts.items} items, "
+            f"{counts.feats} feats, {counts.optional_features} optional features"
+        )
 
     elif source == "custom":
         if not path:
@@ -3774,7 +3813,8 @@ def unload_rulebook(
 def search_rules(
     query: Annotated[str, Field(description="Search term (name, partial match). Can be empty if class_filter is provided.")] = "",
     category: Annotated[
-        Literal["all", "class", "race", "spell", "monster", "feat", "item"] | None,
+        Literal["all", "class", "subclass", "race", "subrace", "spell", "monster", "feat", "item",
+                "background", "optionalfeature", "condition", "rule"] | None,
         Field(description="Filter by category. Default: all")
     ] = "all",
     limit: Annotated[int, Field(description="Max results", ge=1, le=50)] = 20,
@@ -3835,8 +3875,15 @@ def search_rules(
 def get_class_info(
     name: Annotated[str, Field(description="Class name (e.g., 'wizard', 'fighter')")],
     level: Annotated[int | None, Field(description="Show features up to this level", ge=1, le=20)] = None,
+    subclass: Annotated[
+        str | None,
+        Field(description="Also show this subclass's features (e.g. 'echo knight')")
+    ] = None,
 ) -> str:
     """Get full class definition from loaded rulebooks.
+
+    Lists subclasses from every loaded source; with ``level`` shows class (and
+    subclass) features by level and the spell slots at that level.
 
     Works without a campaign loaded (uses global rulebook manager).
     When a campaign is active, its rulebook manager takes priority.
@@ -3849,14 +3896,49 @@ def get_class_info(
     if not class_def:
         return f"❌ Class '{name}' not found in loaded rulebooks."
 
+    def _find_subclass(slug: str):
+        key = slug.lower().replace(" ", "-")
+        return manager.get_subclass(f"{class_def.index}-{key}") or manager.get_subclass(key)
+
     # Markdown format
     lines = [f"# {class_def.name}\n"]
     lines.append(f"**Hit Die:** d{class_def.hit_die}")
     lines.append(f"**Saving Throws:** {', '.join(class_def.saving_throws)}")
-    if class_def.spellcasting:
-        lines.append(f"**Spellcasting:** {class_def.spellcasting.spellcasting_ability}")
-    lines.append(f"\n**Subclasses:** {', '.join(class_def.subclasses) if class_def.subclasses else 'None in SRD'}")
-    lines.append(f"\n*Source: {class_def.source}*")
+    sc = class_def.spellcasting
+    if sc:
+        lines.append(f"**Spellcasting:** {sc.spellcasting_ability} ({sc.caster_type} caster, from level {sc.level})")
+    sub_names = []
+    for slug in class_def.subclasses:
+        sub = _find_subclass(slug)
+        sub_names.append(f"{sub.name} [{sub.source_book or sub.source}]" if sub else slug)
+    title = class_def.subclass_title or "Subclasses"
+    lines.append(f"\n**{title} (choose at level {class_def.subclass_level}):** {', '.join(sub_names) if sub_names else 'None loaded'}")
+
+    if level:
+        lines.append(f"\n## Features up to level {level}")
+        for lvl in sorted(k for k in class_def.class_levels if k <= level):
+            feats = class_def.class_levels[lvl].features
+            if feats:
+                lines.append(f"- **{lvl}:** {', '.join(feats)}")
+        if sc and sc.spell_slots:
+            slots = sc.slots_at(level)
+            slot_text = ", ".join(f"L{k}: {v}" for k, v in slots.items()) or "none"
+            lines.append(f"\n**Spell slots at level {level}{' (Pact Magic)' if sc.pact_magic else ''}:** {slot_text}")
+
+    if subclass:
+        sub = _find_subclass(subclass)
+        if not sub:
+            lines.append(f"\n❌ Subclass '{subclass}' not found for {class_def.name}.")
+        else:
+            lines.append(f"\n## {sub.name}")
+            for lvl, info in sorted(sub.subclass_levels.items()):
+                if level and lvl > level:
+                    continue
+                for feat in info.features:
+                    detail = info.feature_details.get(feat, "")
+                    lines.append(f"- **{lvl} — {feat}:** {detail[:300] + ('…' if len(detail) > 300 else '')}".rstrip(": "))
+
+    lines.append(f"\n*Source: {class_def.source}{f' ({class_def.source_book})' if class_def.source_book else ''}*")
 
     return "\n".join(lines)
 

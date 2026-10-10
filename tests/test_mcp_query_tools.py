@@ -19,7 +19,7 @@ from dm20_protocol.storage import DnDStorage
 
 def run_async(coro):
     """Helper to run async code in sync tests."""
-    return asyncio.get_event_loop().run_until_complete(coro)
+    return asyncio.run(coro)
 from dm20_protocol.models import Character, CharacterClass, Race, AbilityScore
 from dm20_protocol.rulebooks import RulebookManager
 from dm20_protocol.rulebooks.sources.custom import CustomSource
