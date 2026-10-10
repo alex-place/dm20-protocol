@@ -2,6 +2,8 @@
 
 > Drafted: 2026-10-09. Baseline: v0.4.0, commit `8200266`.
 > Format: **single pass**. Phases run in order. Each phase leaves the server shippable, and no phase reopens an earlier one.
+>
+> **Status (2026-10-09, branch `opus-5.5-upgrade`):** Phases 0-3 are implemented, including the `main.py` split (6,535 → 223 lines across `tools/`) and the 5etools rebuild (`docs/5ETOOLS.md`). Phase 4's eval harness is scaffolded in `evals/`; live eval runs, the cost report and the v0.5.0 release are still to do, and running the evals costs API credits. Test suite: 209 → 30 failures (all present before this work; mostly STT/voice environment), with 5,127 passing.
 
 ## Why this pass
 
